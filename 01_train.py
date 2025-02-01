@@ -591,7 +591,6 @@ def main():
         model_name, val_loss = train(
             num_iterations=args.num_iterations,
             warmdown_iters=args.warmdown_iters,
-            use_first_layer=args.use_first_layer,
             seed=args.seed,
             model_id=args.model_id,
         )
