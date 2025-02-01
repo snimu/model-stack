@@ -392,6 +392,7 @@ def train(
         # other
         seed: int = 1234,
         num_vocab: int = 50304,
+        model_id: str = str(uuid.uuid4()),
 ) -> str:
     # set up DDP (distributed data parallel). torchrun sets this env variable
     assert torch.cuda.is_available()
@@ -458,10 +459,9 @@ def train(
 
     # begin logging
     if master_process:
-        run_id = str(uuid.uuid4())
-        logdir = 'logs/%s/' % run_id
+        logdir = 'logs/%s/' % model_id
         os.makedirs(logdir, exist_ok=True)
-        logfile = 'logs/%s.txt' % run_id
+        logfile = 'logs/%s.txt' % model_id
         # create the log file
         with open(logfile, "w") as f:
             # begin the log by printing this file (the Python code)
@@ -523,7 +523,7 @@ def train(
             training_time_ms += 1000 * (time.time() - t0)
             # save the state of the training process
             log = dict(step=step, code=code, model=raw_model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
-            run_name = f'logs/{run_id}/state_step{step:06d}.pt'
+            run_name = f'logs/{model_id}/state_step{step:06d}.pt' if not last_step else f'logs/{model_id}/final_state.pt'
             torch.save(log, run_name)
             # start the clock again
             torch.cuda.synchronize()
@@ -576,113 +576,78 @@ def train(
     return run_name, val_loss
 
 
-def train_train_stack(
-        # stacking hyperparams
-        num_models: int = 2,
-        use_first_layer: bool = False,
-        # data hyperparams
-        input_bin : str = 'fineweb100B/fineweb_train_*.bin', # input .bin to train on
-        input_val_bin : str = 'fineweb100B/fineweb_val_*.bin', # input .bin to eval validation loss on
-        # optimization hyperparams
-        batch_size : int = 8*64, # batch size, in sequences, across all devices
-        device_batch_size : int = 64, # batch size, in sequences, per device
-        sequence_length : int = 1024, # sequence length, in tokens
-        num_iterations : int = 6200, # number of iterations to run
-        learning_rate : float = 0.0036,
-        warmup_iters : int = 0,
-        warmdown_iters : int = 1800, # number of iterations of linear warmup/warmdown for triangular or trapezoidal schedule
-        weight_decay : float = 0,
-        # evaluation and logging hyperparams
-        val_loss_every : int = 125, # every how many steps to evaluate val loss? 0 for only at the end
-        val_tokens : int = 10485760, # how many tokens of validation data? it's important to keep this fixed for consistent comparisons
-        save_every : int = 0, # every how many steps to save the checkpoint? 0 for only at the end
-        # other
-        seed: int = 1234,
-        num_vocab: int = 50304,
-):
-    model_names = []
-    val_losses = []
-    for i in range(num_models):
-        model_name, val_loss = train(
-            # data hyperparams
-            input_bin=input_bin,
-            input_val_bin=input_val_bin,
-            # optimization hyperparams
-            batch_size=batch_size,
-            device_batch_size=device_batch_size,
-            sequence_length=sequence_length,
-            num_iterations=num_iterations,
-            learning_rate=learning_rate,
-            warmup_iters=warmup_iters,
-            warmdown_iters=warmdown_iters,
-            weight_decay=weight_decay,
-            # evaluation and logging hyperparams
-            val_loss_every=val_loss_every,
-            val_tokens=val_tokens,
-            save_every=save_every,
-            # other
-            seed=seed + i,
-            num_vocab=num_vocab,
-        )
-        model_names.append(model_name)
-        val_losses.append(val_loss)
-
-    B, T = device_batch_size // num_models, sequence_length
-    ddp_rank = int(os.environ['RANK'])
-    ddp_local_rank = int(os.environ['LOCAL_RANK'])
-    ddp_world_size = int(os.environ['WORLD_SIZE'])
-    val_loader = DistributedDataLoader(input_val_bin, B, T, ddp_rank, ddp_world_size)
-    val_steps = val_tokens // (B * T * ddp_world_size)
-    
-    models = []
-    for model_name in model_names:
-        model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
-        model.load_state_dict(torch.load(model_name)["model"])
-        model = model.cuda()
-        models.append(model)
-    
-    model = ModelStack(*models, use_first_layer=use_first_layer)
-    model = model.cuda()
-    if hasattr(config, "coordinate_descent_tuning"):
-        config.coordinate_descent_tuning = True # suggested by @Chillee
-    model = torch.compile(model)
-    # here we wrap model into DDP container
-    model = DDP(model, device_ids=[ddp_local_rank])
-    model.eval()
-    val_loader.reset()
-    val_loss = 0.0
-    for _ in range(val_steps):
-        x_val, y_val = val_loader.next_batch()
-        with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-            _, loss = model(x_val, y_val, return_logits=False)
-            val_loss += loss
-    dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
-    val_loss /= val_steps
-
-    results = dict(val_loss_stack=val_loss, val_losses=val_losses, num_models=num_models, use_first_layer=use_first_layer)
-    return results
-
-
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_arguemnt('--train', action='store_true')
+    parser.add_argument('--model-id', type=str, default=str(uuid.uuid4()))
+    parser.add_argument('--model-names', nargs='+', type=str, default=None)
     parser.add_argument('--num-iterations', type=int, default=6200)
     parser.add_argument('--warmdown-iters', type=int, default=1800)
-    parser.add_argument('--num-models', type=int, default=2)
     parser.add_argument('--use-first-layer', action='store_true')
     parser.add_argument('--seed', type=int, default=1234)
     args = parser.parse_args()
+    if args.train:
+        model_name, val_loss = train(
+            num_iterations=args.num_iterations,
+            warmdown_iters=args.warmdown_iters,
+            num_models=args.num_models,
+            use_first_layer=args.use_first_layer,
+            seed=args.seed,
+            model_id=args.model_id,
+        )
+        with open(model_name.replace(".pt", ".txt"), "w") as f:
+            f.write(f"val_loss: {val_loss}\n")
+        dist.destroy_process_group()
+    else:
+        assert args.model_names is not None
+        model_names = args.model_names
+        num_models = len(model_names)
+        use_first_layer = args.use_first_layer
+        input_val_bin = "fineweb100B/fineweb_val_*.bin"
+        val_tokens = 10485760
+        device_batch_size = 64
+        sequence_length = 1024
+        num_vocab = 50304
+        B, T = device_batch_size // num_models, sequence_length
+        ddp_rank = int(os.environ['RANK'])
+        ddp_local_rank = int(os.environ['LOCAL_RANK'])
+        ddp_world_size = int(os.environ['WORLD_SIZE'])
+        val_loader = DistributedDataLoader(input_val_bin, B, T, ddp_rank, ddp_world_size)
+        val_steps = val_tokens // (B * T * ddp_world_size)
+        
+        models = []
+        for model_name in model_names:
+            model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
+            model.load_state_dict(torch.load(model_name)["model"])
+            model = model.cuda()
+            models.append(model)
+        
+        model = ModelStack(*models, use_first_layer=use_first_layer)
+        model = model.cuda()
+        if hasattr(config, "coordinate_descent_tuning"):
+            config.coordinate_descent_tuning = True # suggested by @Chillee
+        model = torch.compile(model)
+        # here we wrap model into DDP container
+        model = DDP(model, device_ids=[ddp_local_rank])
+        model.eval()
+        val_loader.reset()
+        val_loss = 0.0
+        for _ in range(val_steps):
+            x_val, y_val = val_loader.next_batch()
+            with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
+                _, loss = model(x_val, y_val, return_logits=False)
+                val_loss += loss
+        dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
+        val_loss /= val_steps
+        val_losses = []
+        for model_name in model_names:
+            with open(model_name.replace(".pt", ".txt"), "r") as f:
+                val_losses.append(float(f.read().split("val_loss: ")[1].split("\n")[0]))
+        results = dict(val_loss_stack=val_loss, val_losses=val_losses, num_models=num_models, use_first_layer=use_first_layer)
+        df = pl.DataFrame(results)
+        print(df)
+        df.to_csv("results.csv")
 
-    results = train_train_stack(
-        num_iterations=args.num_iterations,
-        warmdown_iters=args.warmdown_iters,
-        num_models=args.num_models,
-        use_first_layer=args.use_first_layer,
-        seed=args.seed,
-    )
-    df = pl.DataFrame(results)
-    print(df)
-    df.to_csv("results.csv")
-    dist.destroy_process_group()
 
 if __name__ == "__main__":
     main()
