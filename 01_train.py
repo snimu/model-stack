@@ -573,8 +573,6 @@ def train(
         print(f"peak memory consumption: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB")
 
     # -------------------------------------------------------------------------
-    # clean up nice
-    dist.destroy_process_group()
     return run_name, val_loss
 
 
@@ -667,6 +665,8 @@ def train_train_stack(
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--num-steps', type=int, default=6200)
+    parser.add_argument('--warmdown-steps', type=int, default=1800)
     parser.add_argument('--num-models', type=int, default=2)
     parser.add_argument('--use-first-layer', action='store_true')
     parser.add_argument('--seed', type=int, default=1234)
@@ -680,6 +680,7 @@ def main():
     df = pl.DataFrame(results)
     print(df)
     df.to_csv("results.csv")
+    dist.destroy_process_group()
 
 if __name__ == "__main__":
     main()
