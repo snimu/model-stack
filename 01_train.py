@@ -666,7 +666,7 @@ def train_train_stack(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-iterations', type=int, default=6200)
-    parser.add_argument('--warmdown-steps', type=int, default=1800)
+    parser.add_argument('--warmdown-iters', type=int, default=1800)
     parser.add_argument('--num-models', type=int, default=2)
     parser.add_argument('--use-first-layer', action='store_true')
     parser.add_argument('--seed', type=int, default=1234)
@@ -674,7 +674,7 @@ def main():
 
     results = train_train_stack(
         num_iterations=args.num_iterations,
-        warmdown_steps=args.warmdown_steps,
+        warmdown_iters=args.warmdown_iters,
         num_models=args.num_models,
         use_first_layer=args.use_first_layer,
         seed=args.seed,
