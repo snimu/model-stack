@@ -578,7 +578,7 @@ def train(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_arguemnt('--train', action='store_true')
+    parser.add_argument('--train', action='store_true')
     parser.add_argument('--savefile', type=str, default="results")
     parser.add_argument('--model-id', type=str, default=str(uuid.uuid4()))
     parser.add_argument('--model-names', nargs='+', type=str, default=None)
