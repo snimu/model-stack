@@ -374,8 +374,8 @@ class DistributedDataLoader:
 
 def train(
         # data hyperparams
-        input_bin : str = 'data/fineweb10B/fineweb_train_*.bin', # input .bin to train on
-        input_val_bin : str = 'data/fineweb10B/fineweb_val_*.bin', # input .bin to eval validation loss on
+        input_bin : str = 'fineweb10B/fineweb_train_*.bin', # input .bin to train on
+        input_val_bin : str = 'fineweb10B/fineweb_val_*.bin', # input .bin to eval validation loss on
         # optimization hyperparams
         batch_size : int = 8*64, # batch size, in sequences, across all devices
         device_batch_size : int = 64, # batch size, in sequences, per device
@@ -583,8 +583,8 @@ def train_train_stack(
         num_models: int = 2,
         use_first_layer: bool = False,
         # data hyperparams
-        input_bin : str = 'data/fineweb100B/fineweb_train_*.bin', # input .bin to train on
-        input_val_bin : str = 'data/fineweb100B/fineweb_val_*.bin', # input .bin to eval validation loss on
+        input_bin : str = 'fineweb100B/fineweb_train_*.bin', # input .bin to train on
+        input_val_bin : str = 'fineweb100B/fineweb_val_*.bin', # input .bin to eval validation loss on
         # optimization hyperparams
         batch_size : int = 8*64, # batch size, in sequences, across all devices
         device_batch_size : int = 64, # batch size, in sequences, per device
