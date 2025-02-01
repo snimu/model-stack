@@ -579,6 +579,7 @@ def train(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_arguemnt('--train', action='store_true')
+    parser.add_argument('--savefile', type=str, default="results")
     parser.add_argument('--model-id', type=str, default=str(uuid.uuid4()))
     parser.add_argument('--model-names', nargs='+', type=str, default=None)
     parser.add_argument('--num-iterations', type=int, default=6200)
@@ -646,7 +647,7 @@ def main():
         results = dict(val_loss_stack=val_loss, val_losses=val_losses, num_models=num_models, use_first_layer=use_first_layer)
         df = pl.DataFrame(results)
         print(df)
-        df.to_csv("results.csv")
+        df.to_csv(f"{args.savefile}.csv")
 
 
 if __name__ == "__main__":
