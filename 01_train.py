@@ -590,15 +590,40 @@ def train(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train', action='store_true')
-    parser.add_argument('--savefile', type=str, default="results")
-    parser.add_argument('--model-id', type=str, default=str(uuid.uuid4()))
-    parser.add_argument('--model-names', nargs='+', type=str, default=None)
-    parser.add_argument('--num-iterations', type=int, default=6200)
-    parser.add_argument('--warmdown-iters', type=int, default=1800)
-    parser.add_argument('--use-first-layer', action='store_true')
-    parser.add_argument('--seed', type=int, default=1234)
-    parser.add_argument('--from-model', type=str, default=None)
+    parser.add_argument(
+        '--train', action='store_true',
+        help="If set, train new model; else, stack them.",
+    )
+    parser.add_argument(
+        '--savefile', type=str, default="results",
+        help="Save results from stacking in here. "
+        "type=str, default=results",
+    )
+    parser.add_argument(
+        '--model-id', type=str, default=str(uuid.uuid4()),
+        help="Trained model saved in logs/<model-id>/final_state.pt. "
+        "type=str, default=<uuid4 string>",
+    )
+    parser.add_argument(
+        '--model-names', nargs='+', type=str, default=None,
+        help="Stack & eval these models. "
+        "Example: --model-names logs/model1/final_state.pt logs/model2/final_state.pt --- "
+        "type=str, default=None, nargs=+",
+    )
+    parser.add_argument('--num-iterations', type=int, default=6200, help="type=int, default=6200")
+    parser.add_argument('--warmdown-iters', type=int, default=1800, help="type=int, default=1800")
+    parser.add_argument(
+        '--use-first-layer', action='store_true',
+        help="Only relevant when stacking. "
+        "If set, use all layers of all models, "
+        "else cut off first layer from all models but the first. "
+        "type=FLAG",
+    )
+    parser.add_argument('--seed', type=int, default=1234, help="type=int, default=1234")
+    parser.add_argument(
+        '--from-model', type=str, default=None,
+        help="Train new model with embeddings from this one. type=str, default=None",
+    )
     args = parser.parse_args()
     if args.train:
         train(
