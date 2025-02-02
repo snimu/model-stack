@@ -213,6 +213,7 @@ class GPTConfig:
     n_layer : int = 12
     n_head : int = 12
     n_embd : int = 768
+    from_model: str | None = None
 
 class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=True)
 
@@ -220,8 +221,12 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
         super().__init__()
         self.config = config
 
+        wte = nn.Embedding(config.vocab_size, config.n_embd)
+        if config.from_model is not None:
+            wte.weight = torch.load(config.from_model)["model"]["_orig_mod.transformer.wte.weight"]
+
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wte = wte,
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -393,6 +398,7 @@ def train(
         seed: int = 1234,
         num_vocab: int = 50304,
         model_id: str = str(uuid.uuid4()),
+        from_model: str | None = None,
 ) -> str:
     # set up DDP (distributed data parallel). torchrun sets this env variable
     assert torch.cuda.is_available()
@@ -427,7 +433,7 @@ def train(
     x, y = train_loader.next_batch()
 
     # init the model from scratch
-    model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
+    model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model))
     model = model.cuda()
     if hasattr(config, "coordinate_descent_tuning"):
         config.coordinate_descent_tuning = True # suggested by @Chillee
@@ -438,10 +444,13 @@ def train(
     ctx = torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16)
 
     # init the optimizer(s)
-    optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=learning_rate, betas=(0.9, 0.95),
-                                weight_decay=weight_decay, fused=True)
-    optimizer2 = Muon(raw_model.transformer.h.parameters(), lr=0.1*learning_rate, momentum=0.95)
-    optimizers = [optimizer1, optimizer2]
+    if config.from_model is not None:  # don't optimize loaded embeddings / lm_head parameters
+        optimizers = [Muon(raw_model.transformer.h.parameters(), lr=0.1*learning_rate, momentum=0.95)]
+    else:
+        optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=learning_rate, betas=(0.9, 0.95),
+                                    weight_decay=weight_decay, fused=True)
+        optimizer2 = Muon(raw_model.transformer.h.parameters(), lr=0.1*learning_rate, momentum=0.95)
+        optimizers = [optimizer1, optimizer2]
     # learning rate decay scheduler (linear warmup and warmdown)
     def get_lr(it):
         assert it <= num_iterations
@@ -589,6 +598,7 @@ def main():
     parser.add_argument('--warmdown-iters', type=int, default=1800)
     parser.add_argument('--use-first-layer', action='store_true')
     parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--from-model', type=str, default=None)
     args = parser.parse_args()
     if args.train:
         train(
@@ -596,6 +606,7 @@ def main():
             warmdown_iters=args.warmdown_iters,
             seed=args.seed,
             model_id=args.model_id,
+            from_model=args.from_model,
         )
     else:
         assert args.model_names is not None
