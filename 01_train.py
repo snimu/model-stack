@@ -571,7 +571,10 @@ def train(
 
     if master_process:
         print(f"peak memory consumption: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB")
-        return run_name, val_loss
+        with open(f"{model_id}.txt", "w") as f:
+            f.write(f"val_loss: {val_loss}\n")
+    dist.destroy_process_group()
+        
 
     # -------------------------------------------------------------------------
 
@@ -588,15 +591,12 @@ def main():
     parser.add_argument('--seed', type=int, default=1234)
     args = parser.parse_args()
     if args.train:
-        model_name, val_loss = train(
+        train(
             num_iterations=args.num_iterations,
             warmdown_iters=args.warmdown_iters,
             seed=args.seed,
             model_id=args.model_id,
         )
-        with open(model_name.replace(".pt", ".txt"), "w") as f:
-            f.write(f"val_loss: {val_loss}\n")
-        dist.destroy_process_group()
     else:
         assert args.model_names is not None
         model_names = args.model_names
