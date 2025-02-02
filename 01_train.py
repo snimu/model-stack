@@ -257,7 +257,7 @@ class ModelStack(nn.Module):
 
     def __init__(self, *models, use_first_layer=False):
         super().__init__()
-        self.wte = models[0].wte
+        self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
         if use_first_layer:
             blocks = [layer for model in models for layer in model.transformer.h]
@@ -607,17 +607,24 @@ def main():
         device_batch_size = 64
         sequence_length = 1024
         num_vocab = 50304
-        B, T = device_batch_size // num_models, sequence_length
+        dist.init_process_group(backend='nccl')
         ddp_rank = int(os.environ['RANK'])
         ddp_local_rank = int(os.environ['LOCAL_RANK'])
         ddp_world_size = int(os.environ['WORLD_SIZE'])
+        device = f'cuda:{ddp_local_rank}'
+        torch.cuda.set_device(device)
+        print(f"using device: {device}")
+        master_process = (ddp_rank == 0) # this process will do logging, checkpointing etc.
+        B, T = device_batch_size // num_models, sequence_length
         val_loader = DistributedDataLoader(input_val_bin, B, T, ddp_rank, ddp_world_size)
         val_steps = val_tokens // (B * T * ddp_world_size)
         
         models = []
         for model_name in model_names:
             model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
-            model.load_state_dict(torch.load(model_name)["model"])
+            state_dict = torch.load(model_name)["model"]
+            state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+            model.load_state_dict(state_dict)
             model = model.cuda()
             models.append(model)
         
@@ -637,15 +644,16 @@ def main():
                 _, loss = model(x_val, y_val, return_logits=False)
                 val_loss += loss
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
-        val_loss /= val_steps
-        val_losses = []
-        for model_name in model_names:
-            with open(model_name.replace(".pt", ".txt"), "r") as f:
-                val_losses.append(float(f.read().split("val_loss: ")[1].split("\n")[0]))
-        results = dict(val_loss_stack=val_loss, val_losses=val_losses, num_models=num_models, use_first_layer=use_first_layer)
-        df = pl.DataFrame(results)
-        print(df)
-        df.to_csv(f"{args.savefile}.csv")
+        if master_process:
+            val_loss /= val_steps
+            val_losses = []
+            for model_name in model_names:
+                with open(model_name.split("/")[1] + ".txt", "r") as f:
+                    val_losses.append(float(f.read().split("val_loss: ")[1].split("\n")[0]))
+            results = dict(val_loss_stack=val_loss, val_losses=str(val_losses), num_models=num_models, use_first_layer=use_first_layer)
+            df = pl.DataFrame(results)
+            print(df)
+            df.write_csv(f"{args.savefile}.csv")
 
 
 if __name__ == "__main__":
