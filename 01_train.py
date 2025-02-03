@@ -221,16 +221,16 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
         super().__init__()
         self.config = config
 
-        wte = nn.Embedding(config.vocab_size, config.n_embd)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         if config.from_model is not None:
-            wte.weight.data = torch.load(config.from_model)["model"]["_orig_mod.transformer.wte.weight"]
+            self.lm_head.weight.data = torch.load(config.from_model)["model"]["_orig_mod.lm_head.weight"]
+        wte = nn.Embedding(config.vocab_size, config.n_embd)
+        wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
         self.transformer = nn.ModuleDict(dict(
             wte = wte,
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
         ))
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
     def forward(self, idx, targets=None, return_logits=True):
         # forward the GPT model itself
