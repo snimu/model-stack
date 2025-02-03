@@ -625,6 +625,7 @@ def main():
         help="Train new model with embeddings from this one. type=str, default=None",
     )
     args = parser.parse_args()
+    torch.set_float32_matmul_precision('high')
     if args.train:
         train(
             num_iterations=args.num_iterations,
