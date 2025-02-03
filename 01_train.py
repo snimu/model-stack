@@ -223,7 +223,7 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
 
         wte = nn.Embedding(config.vocab_size, config.n_embd)
         if config.from_model is not None:
-            wte.weight = torch.load(config.from_model)["model"]["_orig_mod.transformer.wte.weight"]
+            wte.weight.data = torch.load(config.from_model)["model"]["_orig_mod.transformer.wte.weight"]
 
         self.transformer = nn.ModuleDict(dict(
             wte = wte,
