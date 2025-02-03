@@ -444,7 +444,7 @@ def train(
     ctx = torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16)
 
     # init the optimizer(s)
-    if config.from_model is not None:  # don't optimize loaded embeddings / lm_head parameters
+    if from_model is not None:  # don't optimize loaded embeddings / lm_head parameters
         optimizers = [Muon(raw_model.transformer.h.parameters(), lr=0.1*learning_rate, momentum=0.95)]
     else:
         optimizer1 = torch.optim.AdamW(raw_model.lm_head.parameters(), lr=learning_rate, betas=(0.9, 0.95),
