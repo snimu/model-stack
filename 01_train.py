@@ -427,6 +427,7 @@ def train(
     # load tokens
     train_loader = DistributedDataLoader(input_bin, B, T, ddp_rank, ddp_world_size)
     val_loader = DistributedDataLoader(input_val_bin, B, T, ddp_rank, ddp_world_size)
+    random.shuffle(train_loader.files)
     if master_process:
         print(f"Training DataLoader: total number of tokens: {train_loader.ntok_total} across {len(train_loader.files)} files")
         print(f"Validation DataLoader: total number of tokens: {val_loader.ntok_total} across {len(val_loader.files)} files")
