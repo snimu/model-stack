@@ -713,16 +713,16 @@ def main():
                 with open(model_name.split("/")[1] + ".txt", "r") as f:
                     val_losses.append(float(f.read().split("val_loss: ")[1].split("\n")[0]))
             results = dict(
-                val_loss_stack=val_loss,
-                val_losses=str(val_losses),
-                use_first_layer=args.use_first_layer,
-                use_last_layer=args.use_last_layer,
-                num_tokens_seen=int(8*64*1024*args.num_iterations),  # batch_size*sequence_length*num_iterations
-                num_models=num_models,
-                seed=args.seed,
-                model_names=args.model_names,
-                weight_decay=args.weight_decay,
-                learning_rate=args.learning_rate,
+                val_loss_stack=[val_loss],
+                val_losses=[str(val_losses)],
+                use_first_layer=[args.use_first_layer],
+                use_last_layer=[args.use_last_layer],
+                num_tokens_seen=[int(8*64*1024*args.num_iterations)],  # batch_size*sequence_length*num_iterations
+                num_models=[num_models],
+                seed=[args.seed],
+                model_names=[str(args.model_names)],
+                weight_decay=[args.weight_decay],
+                learning_rate=[args.learning_rate],
             )
             df = pl.DataFrame(results)
             print(df)
