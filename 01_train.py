@@ -260,7 +260,7 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
 
 class ModelStack(nn.Module):
 
-    def __init__(self, *models, use_first_layer=False, use_last_layer=False):
+    def __init__(self, *models: GPT, use_first_layer=False, use_last_layer=False):
         super().__init__()
         self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
@@ -268,7 +268,7 @@ class ModelStack(nn.Module):
         # Stack all the blocks; cut off first and/or last layer if needed
         start = 0 if use_first_layer else 1
         end = None if use_last_layer else -1
-        blocks = [model.transformer.h[start:end] for model in models]
+        blocks = [block for model in models for block in model.transformer.h[start:end]]
 
         # Make sure that the first layer of model 1 and the last layer of model -1 are always included
         if not use_first_layer:
