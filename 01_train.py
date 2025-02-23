@@ -714,7 +714,11 @@ def main():
             )
             df = pl.DataFrame(results)
             print(df)
-            df.write_csv(f"{args.savefile}.csv")
+            if os.path.exists(args.savefile):
+                with open(f"{args.savefile}.csv", "ab") as f:
+                    df.write_csv(f, include_header=False)
+            else:
+                df.write_csv(f"{args.savefile}.csv")
 
 
 if __name__ == "__main__":
