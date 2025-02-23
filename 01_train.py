@@ -641,6 +641,14 @@ def main():
         '--from-model', type=str, default=None,
         help="Train new model with embeddings from this one. type=str, default=None",
     )
+    parser.add_argument(
+        '--weight-decay', type=float, default=0,
+        help="Weight decay for AdamW. type=float, default=0",
+    )
+    parser.add_argument(
+        '--learning-rate', type=float, default=0.0036,
+        help="Learning rate for AdamW. type=float, default=0.0036",
+    )
     args = parser.parse_args()
     torch.set_float32_matmul_precision('high')
     if args.train:
@@ -650,6 +658,8 @@ def main():
             seed=args.seed,
             model_id=args.model_id,
             from_model=args.from_model,
+            weight_decay=args.weight_decay,
+            learning_rate=args.learning_rate,
         )
     else:
         assert args.model_names is not None
@@ -711,6 +721,8 @@ def main():
                 num_models=num_models,
                 seed=args.seed,
                 model_names=args.model_names,
+                weight_decay=args.weight_decay,
+                learning_rate=args.learning_rate,
             )
             df = pl.DataFrame(results)
             print(df)
