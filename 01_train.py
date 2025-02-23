@@ -260,18 +260,27 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
 
 class ModelStack(nn.Module):
 
-    def __init__(self, *models, use_first_layer=False):
+    def __init__(self, *models, use_first_layer=False, use_last_layer=False):
         super().__init__()
         self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
-        if use_first_layer:
-            blocks = [layer for model in models for layer in model.transformer.h]
-        else:
-            blocks = [layer for layer in models[0].transformer.h]
-            blocks.extend([layer for model in models[1:] for layer in model.transformer.h[1:]])  # skip the first layer
-        self.blocks = blocks
+
+        # Stack all the blocks; cut off first and/or last layer if needed
+        start = 0 if use_first_layer else 1
+        end = None if use_last_layer else -1
+        blocks = [model.transformer.h[start:end] for model in models]
+
+        # Make sure that the first layer of model 1 and the last layer of model -1 are always included
+        if not use_first_layer:
+            blocks = [models[0].transformer.h[0]] + blocks
+        if not use_last_layer:
+            blocks = blocks + [models[-1].transformer.h[-1]]
+        
+        # Save the stack
+        self.blocks = nn.ModuleList(blocks)
 
         self.use_first_layer = use_first_layer
+        self.use_last_layer = use_last_layer
 
     def forward(self, x, targets=None, return_logits=True):
         x = self.wte(x)
@@ -385,7 +394,7 @@ def train(
         batch_size : int = 8*64, # batch size, in sequences, across all devices
         device_batch_size : int = 64, # batch size, in sequences, per device
         sequence_length : int = 1024, # sequence length, in tokens
-        num_iterations : int = 6200, # number of iterations to run
+        num_iterations : int = 6200, # number of iterations to run; batch_size*sequence_length*num_iterations = (8*64)*1024*6200 = ~3.25B tokens
         learning_rate : float = 0.0036,
         warmup_iters : int = 0,
         warmdown_iters : int = 1800, # number of iterations of linear warmup/warmdown for triangular or trapezoidal schedule
@@ -620,6 +629,13 @@ def main():
         "else cut off first layer from all models but the first. "
         "type=FLAG",
     )
+    parser.add_argument(
+        '--use-last-layer', action='store_true',
+        help="Only relevant when stacking. "
+        "If set, use all layers of all models, "
+        "else cut off last layer from all models but the last. "
+        "type=FLAG",
+    )
     parser.add_argument('--seed', type=int, default=1234, help="type=int, default=1234")
     parser.add_argument(
         '--from-model', type=str, default=None,
@@ -637,9 +653,7 @@ def main():
         )
     else:
         assert args.model_names is not None
-        model_names = args.model_names
-        num_models = len(model_names)
-        use_first_layer = args.use_first_layer
+        num_models = len(args.model_names)
         input_val_bin = "fineweb100B/fineweb_val_*.bin"
         val_tokens = 10485760
         device_batch_size = 64
@@ -658,7 +672,7 @@ def main():
         val_steps = val_tokens // (B * T * ddp_world_size)
         
         models = []
-        for model_name in model_names:
+        for model_name in args.model_names:
             model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
             state_dict = torch.load(model_name)["model"]
             state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -666,7 +680,7 @@ def main():
             model = model.cuda()
             models.append(model)
         
-        model = ModelStack(*models, use_first_layer=use_first_layer)
+        model = ModelStack(*models, use_first_layer=args.use_first_layer, use_last_layer=args.use_last_layer)
         model = model.cuda()
         if hasattr(config, "coordinate_descent_tuning"):
             config.coordinate_descent_tuning = True # suggested by @Chillee
@@ -685,10 +699,19 @@ def main():
         if master_process:
             val_loss /= val_steps
             val_losses = []
-            for model_name in model_names:
+            for model_name in args.model_names:
                 with open(model_name.split("/")[1] + ".txt", "r") as f:
                     val_losses.append(float(f.read().split("val_loss: ")[1].split("\n")[0]))
-            results = dict(val_loss_stack=val_loss, val_losses=str(val_losses), num_models=num_models, use_first_layer=use_first_layer)
+            results = dict(
+                val_loss_stack=val_loss,
+                val_losses=str(val_losses),
+                use_first_layer=args.use_first_layer,
+                use_last_layer=args.use_last_layer,
+                num_tokens_seen=int(8*64*1024*args.num_iterations),  # batch_size*sequence_length*num_iterations
+                num_models=num_models,
+                seed=args.seed,
+                model_names=args.model_names,
+            )
             df = pl.DataFrame(results)
             print(df)
             df.write_csv(f"{args.savefile}.csv")
