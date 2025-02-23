@@ -726,7 +726,7 @@ def main():
             )
             df = pl.DataFrame(results)
             print(df)
-            if os.path.exists(args.savefile):
+            if os.path.exists(f"{args.savefile}.csv"):
                 with open(f"{args.savefile}.csv", "ab") as f:
                     df.write_csv(f, include_header=False)
             else:
