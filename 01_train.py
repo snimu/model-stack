@@ -260,7 +260,7 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
 
 class ModelStack(nn.Module):
 
-    def __init__(self, *models: GPT, use_first_layer=False, use_last_layer=False):
+    def __init__(self, *models: GPT, use_first_layer=False, use_last_layer=False, use_norm=False):
         super().__init__()
         self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
@@ -268,26 +268,31 @@ class ModelStack(nn.Module):
         # Stack all the blocks; cut off first and/or last layer if needed
         start = 0 if use_first_layer else 1
         end = None if use_last_layer else -1
-        blocks = [block for model in models for block in model.transformer.h[start:end]]
-
-        # Make sure that the first layer of model 1 and the last layer of model -1 are always included
-        if not use_first_layer:
-            blocks = [models[0].transformer.h[0]] + blocks
-        if not use_last_layer:
-            blocks = blocks + [models[-1].transformer.h[-1]]
+        transformer_cores = []
+        for i in range(len(models)):
+            if i == 0:
+                transformer_cores.append(nn.Sequential(*[models[i].transformer.h[:end]]))
+            elif i == len(models) - 1:
+                transformer_cores.append(nn.Sequential(*[models[i].transformer.h[start:]]))
+            else:
+                transformer_cores.append(nn.Sequential(*[models[i].transformer.h[start:end]]))
         
         # Save the stack
-        self.blocks = nn.ModuleList(blocks)
+        self.transformer_cores = nn.ModuleList(transformer_cores)
 
         self.use_first_layer = use_first_layer
         self.use_last_layer = use_last_layer
+        self.use_norm = use_norm
 
     def forward(self, x, targets=None, return_logits=True):
         x = self.wte(x)
 
-        for block in self.blocks:
-            x = block(x)
-        x = rmsnorm(x)
+        for transformer_core in self.transformer_cores:
+            x = transformer_core(x)
+            if self.use_norm:
+                x = rmsnorm(x)
+        if not self.use_norm:  # always norm before the language head
+            x = rmsnorm(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -636,6 +641,12 @@ def main():
         "else cut off last layer from all models but the last. "
         "type=FLAG",
     )
+    parser.add_argument(
+        '--use-norm', action='store_true',
+        help="Only relevant when stacking. "
+        "If set, use norm after each transformer core. "
+        "type=FLAG",
+    )
     parser.add_argument('--seed', type=int, default=1234, help="type=int, default=1234")
     parser.add_argument(
         '--from-model', type=str, default=None,
@@ -690,7 +701,12 @@ def main():
             model = model.cuda()
             models.append(model)
         
-        model = ModelStack(*models, use_first_layer=args.use_first_layer, use_last_layer=args.use_last_layer)
+        model = ModelStack(
+            *models,
+            use_first_layer=args.use_first_layer,
+            use_last_layer=args.use_last_layer,
+            use_norm=args.use_norm,
+        )
         model = model.cuda()
         if hasattr(config, "coordinate_descent_tuning"):
             config.coordinate_descent_tuning = True # suggested by @Chillee
@@ -717,6 +733,7 @@ def main():
                 val_losses=[str(val_losses)],
                 use_first_layer=[args.use_first_layer],
                 use_last_layer=[args.use_last_layer],
+                use_norm=[args.use_norm],
                 num_tokens_seen=[int(8*64*1024*args.num_iterations)],  # batch_size*sequence_length*num_iterations
                 num_models=[num_models],
                 seed=[args.seed],
