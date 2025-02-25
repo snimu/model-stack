@@ -702,8 +702,10 @@ def main():
             model = model.cuda()
             models.append(model)
         
-        print(f"{torch.allclose(models[0].lm_head.weight, models[1].lm_head.weight)}")
-        print(f"{torch.allclose(models[0].transformer.wte.weight, models[1].transformer.wte.weight)}")
+        print(f"{torch.allclose(models[0].lm_head.weight, models[1].lm_head.weight)=}")
+        print(f"{torch.allclose(models[0].transformer.wte.weight, models[1].transformer.wte.weight)=}")
+        print(f"{torch.allclose(models[0].lm_head.weight, models[0].transformer.wte.weight)=}")
+        print(f"{torch.allclose(models[1].lm_head.weight, models[1].transformer.wte.weight)=}")
         raise
         
         model = ModelStack(
