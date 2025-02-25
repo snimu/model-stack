@@ -264,6 +264,7 @@ class ModelStack(nn.Module):
         super().__init__()
         self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
+        self.wte.weight = self.lm_head.weight  # make sure that the weight typing actually occurs (otherwise we have a randomly initialized embedding)
 
         # Stack all the blocks; cut off first and/or last layer if needed
         start = 0 if use_first_layer else 1
