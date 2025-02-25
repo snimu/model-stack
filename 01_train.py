@@ -271,11 +271,11 @@ class ModelStack(nn.Module):
         transformer_cores = []
         for i in range(len(models)):
             if i == 0:
-                transformer_cores.append(nn.Sequential(*[models[i].transformer.h[:end]]))
+                transformer_cores.append(nn.ModuleList([models[i].transformer.h[:end]]))
             elif i == len(models) - 1:
-                transformer_cores.append(nn.Sequential(*[models[i].transformer.h[start:]]))
+                transformer_cores.append(nn.ModuleList([models[i].transformer.h[start:]]))
             else:
-                transformer_cores.append(nn.Sequential(*[models[i].transformer.h[start:end]]))
+                transformer_cores.append(nn.ModuleList([models[i].transformer.h[start:end]]))
         
         # Save the stack
         self.transformer_cores = nn.ModuleList(transformer_cores)
@@ -288,7 +288,8 @@ class ModelStack(nn.Module):
         x = self.wte(x)
 
         for transformer_core in self.transformer_cores:
-            x = transformer_core(x)
+            for block in transformer_core:
+                x = block(x)
             if self.use_norm:
                 x = rmsnorm(x)
         if not self.use_norm:  # always norm before the language head
