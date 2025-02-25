@@ -750,6 +750,8 @@ def main():
                     df.write_csv(f, include_header=False)
             else:
                 df.write_csv(f"{args.savefile}.csv")
+        
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
