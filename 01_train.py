@@ -713,7 +713,7 @@ def main():
                 _, loss = models[0](x_val, y_val, return_logits=False)
                 val_loss += loss
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
-        print(f"val_loss: {val_loss}")
+        print(f"val_loss: {val_loss/val_steps}")
         raise
         model = ModelStack(
             models,
