@@ -1,6 +1,6 @@
 # TRAIN
-torchrun --nproc_per_node=4 01_train.py --train --model-id=m1-shared-emb-1xtoks-norm --seed=399938282
-torchrun --nproc_per_node=4 01_train.py --train --model-id=m2-shared-emb-1xtoks-norm --seed=677719191 --from-model=logs/m1-shared-emb-1xtoks-norm/final_state.pt 
+torchrun --nproc_per_node=4 01_train.py --train --model-id=m1-shared-emb-1xtoks-norm --use-norm --seed=399938282
+torchrun --nproc_per_node=4 01_train.py --train --model-id=m2-shared-emb-1xtoks-norm --use-norm --seed=677719191 --from-model=logs/m1-shared-emb-1xtoks-norm/final_state.pt 
 
 # STACK & EVAL
 ## two different models
