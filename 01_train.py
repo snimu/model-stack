@@ -701,22 +701,26 @@ def main():
             model.load_state_dict(state_dict)
             model = model.cuda()
             models.append(model)
+
         
+        models[0] = DDP(torch.compile(models[0]), device_ids=[ddp_local_rank])
+        models[0].eval()
+        val_loader.reset()
+        val_loss = 0.0
+        for _ in range(val_steps):
+            x_val, y_val = val_loader.next_batch()
+            with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
+                _, loss = models[0](x_val, y_val, return_logits=False)
+                val_loss += loss
+        dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
+        print(f"val_loss: {val_loss}")
+        raise
         model = ModelStack(
             models,
             use_first_layer=args.use_first_layer,
             use_last_layer=args.use_last_layer,
             use_norm=args.use_norm,
         )
-        
-        print(f"\n\n{torch.allclose(models[0].lm_head.weight, models[1].lm_head.weight)=}")
-        print(f"{torch.allclose(models[0].transformer.wte.weight, models[1].transformer.wte.weight)=}")
-        print(f"{torch.allclose(models[0].lm_head.weight, models[0].transformer.wte.weight)=}")
-        print(f"{torch.allclose(models[1].lm_head.weight, models[1].transformer.wte.weight)=}\n")
-        print(f"{torch.allclose(model.lm_head.weight, model.wte.weight)=}")
-        print(f"{torch.allclose(model.lm_head.weight, models[0].lm_head.weight)=}\n\n")
-        
-        raise
         model = model.cuda()
         if hasattr(config, "coordinate_descent_tuning"):
             config.coordinate_descent_tuning = True # suggested by @Chillee
