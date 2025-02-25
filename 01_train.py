@@ -260,7 +260,7 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
 
 class ModelStack(nn.Module):
 
-    def __init__(self, *models: GPT, use_first_layer=False, use_last_layer=False, use_norm=False):
+    def __init__(self, models: list[GPT], use_first_layer=False, use_last_layer=False, use_norm=False):
         super().__init__()
         self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
@@ -705,7 +705,7 @@ def main():
             models.append(model)
         
         model = ModelStack(
-            *models,
+            models,
             use_first_layer=args.use_first_layer,
             use_last_layer=args.use_last_layer,
             use_norm=args.use_norm,
