@@ -702,19 +702,6 @@ def main():
             model = model.cuda()
             models.append(model)
 
-        
-        models[0] = DDP(torch.compile(models[0]), device_ids=[ddp_local_rank])
-        models[0].eval()
-        val_loader.reset()
-        val_loss = 0.0
-        for _ in range(val_steps):
-            x_val, y_val = val_loader.next_batch()
-            with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-                _, loss = models[0](x_val, y_val, return_logits=False)
-                val_loss += loss
-        dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
-        print(f"val_loss: {val_loss/val_steps}")
-        raise
         model = ModelStack(
             models,
             use_first_layer=args.use_first_layer,
