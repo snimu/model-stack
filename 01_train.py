@@ -713,7 +713,7 @@ def main():
         print(f"{torch.allclose(models[0].transformer.wte.weight, models[1].transformer.wte.weight)=}")
         print(f"{torch.allclose(models[0].lm_head.weight, models[0].transformer.wte.weight)=}")
         print(f"{torch.allclose(models[1].lm_head.weight, models[1].transformer.wte.weight)=}\n")
-        print(f"{torch.allclose(model.lm_head.weight, model.transformer.wte.weight)=}")
+        print(f"{torch.allclose(model.lm_head.weight, model.wte.weight)=}")
         print(f"{torch.allclose(model.lm_head.weight, models[0].lm_head.weight)=}\n\n")
         
         raise
