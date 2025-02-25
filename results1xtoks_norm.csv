@@ -1,0 +1,17 @@
+val_loss_stack,val_losses,use_first_layer,use_last_layer,use_norm,num_tokens_seen,num_models,seed,model_names,weight_decay,learning_rate
+13.24560260772705,"[3.2837166786193848, 3.312744140625]",false,false,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+10.776812553405762,"[3.2837166786193848, 3.312744140625]",true,false,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+11.420855522155762,"[3.2837166786193848, 3.312744140625]",false,true,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+11.709691047668457,"[3.2837166786193848, 3.312744140625]",true,true,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+11.222416877746582,"[3.2837166786193848, 3.2837166786193848]",false,false,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+8.597745895385742,"[3.2837166786193848, 3.2837166786193848]",true,false,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+10.455029487609863,"[3.2837166786193848, 3.2837166786193848]",false,true,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+8.531657218933105,"[3.2837166786193848, 3.2837166786193848]",true,true,true,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+7.204484462738037,"[3.2837166786193848, 3.312744140625]",false,false,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+7.051326274871826,"[3.2837166786193848, 3.312744140625]",true,false,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+6.249301433563232,"[3.2837166786193848, 3.312744140625]",false,true,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+6.663939952850342,"[3.2837166786193848, 3.312744140625]",true,true,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m2-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+5.871946334838867,"[3.2837166786193848, 3.2837166786193848]",false,false,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+8.056148529052734,"[3.2837166786193848, 3.2837166786193848]",true,false,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+6.491946697235107,"[3.2837166786193848, 3.2837166786193848]",false,true,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
+7.595556735992432,"[3.2837166786193848, 3.2837166786193848]",true,true,false,3250585600,2,1234,"['logs/m1-shared-emb-1xtoks-norm/final_state.pt', 'logs/m1-shared-emb-1xtoks-norm/final_state.pt']",0,0.0036
