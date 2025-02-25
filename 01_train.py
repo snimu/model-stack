@@ -271,14 +271,14 @@ class ModelStack(nn.Module):
         transformer_cores = []
         for i in range(len(models)):
             if i == 0:
-                transformer_cores.append(nn.ModuleList([models[i].transformer.h[:end]]))
+                transformer_cores.append([block for block in models[i].transformer.h[:end]])
             elif i == len(models) - 1:
-                transformer_cores.append(nn.ModuleList([models[i].transformer.h[start:]]))
+                transformer_cores.append([block for block in models[i].transformer.h[start:]])
             else:
-                transformer_cores.append(nn.ModuleList([models[i].transformer.h[start:end]]))
+                transformer_cores.append([block for block in models[i].transformer.h[start:end]])
         
         # Save the stack
-        self.transformer_cores = nn.ModuleList(transformer_cores)
+        self.transformer_cores: list[list[Block]] = transformer_cores
 
         self.use_first_layer = use_first_layer
         self.use_last_layer = use_last_layer
