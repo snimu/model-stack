@@ -702,18 +702,21 @@ def main():
             model = model.cuda()
             models.append(model)
         
-        print(f"{torch.allclose(models[0].lm_head.weight, models[1].lm_head.weight)=}")
-        print(f"{torch.allclose(models[0].transformer.wte.weight, models[1].transformer.wte.weight)=}")
-        print(f"{torch.allclose(models[0].lm_head.weight, models[0].transformer.wte.weight)=}")
-        print(f"{torch.allclose(models[1].lm_head.weight, models[1].transformer.wte.weight)=}")
-        raise
-        
         model = ModelStack(
             models,
             use_first_layer=args.use_first_layer,
             use_last_layer=args.use_last_layer,
             use_norm=args.use_norm,
         )
+        
+        print(f"\n\n{torch.allclose(models[0].lm_head.weight, models[1].lm_head.weight)=}")
+        print(f"{torch.allclose(models[0].transformer.wte.weight, models[1].transformer.wte.weight)=}")
+        print(f"{torch.allclose(models[0].lm_head.weight, models[0].transformer.wte.weight)=}")
+        print(f"{torch.allclose(models[1].lm_head.weight, models[1].transformer.wte.weight)=}\n")
+        print(f"{torch.allclose(model.lm_head.weight, model.transformer.wte.weight)=}")
+        print(f"{torch.allclose(model.lm_head.weight, models[0].lm_head.weight)=}\n\n")
+        
+        raise
         model = model.cuda()
         if hasattr(config, "coordinate_descent_tuning"):
             config.coordinate_descent_tuning = True # suggested by @Chillee
