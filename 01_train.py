@@ -698,6 +698,7 @@ def main():
             model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
             state_dict = torch.load(model_name)["model"]
             state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+            assert "lm_head.weight" in state_dict, f"counter-check: {'transformer.wte' in state_dict=}"
             model.load_state_dict(state_dict)
             model.transformer.wte.weight = model.lm_head.weight
             model = model.cuda()
