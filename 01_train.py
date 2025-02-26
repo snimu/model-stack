@@ -213,6 +213,7 @@ class GPTConfig:
     n_layer : int = 12
     n_head : int = 12
     n_embd : int = 768
+    use_norm: bool = False
     from_model: str | None = None
 
 class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=True)
@@ -235,6 +236,8 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
     def forward(self, idx, targets=None, return_logits=True):
         # forward the GPT model itself
         x = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        if self.config.use_norm:
+            x = rmsnorm(x)
 
         for block in self.transformer.h:
             x = block(x)
@@ -414,6 +417,7 @@ def train(
         num_vocab: int = 50304,
         model_id: str = str(uuid.uuid4()),
         from_model: str | None = None,
+        use_norm: bool = False,
 ) -> str:
     # set up DDP (distributed data parallel). torchrun sets this env variable
     assert torch.cuda.is_available()
@@ -449,7 +453,9 @@ def train(
     x, y = train_loader.next_batch()
 
     # init the model from scratch
-    model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model))
+    model = GPT(GPTConfig(
+        vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model, use_norm=use_norm,
+    ))
     model = model.cuda()
     if hasattr(config, "coordinate_descent_tuning"):
         config.coordinate_descent_tuning = True # suggested by @Chillee
@@ -672,6 +678,7 @@ def main():
             from_model=args.from_model,
             weight_decay=args.weight_decay,
             learning_rate=args.learning_rate,
+            use_norm=args.use_norm,
         )
     else:
         assert args.model_names is not None
