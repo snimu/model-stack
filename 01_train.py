@@ -291,12 +291,11 @@ class ModelStack(nn.Module):
         x = self.wte(x)
 
         for transformer_core in self.transformer_cores:
-            for block in transformer_core:
-                x = block(x)
             if self.use_norm:
                 x = rmsnorm(x)
-        if not self.use_norm:  # always norm before the language head
-            x = rmsnorm(x)
+            for block in transformer_core:
+                x = block(x)
+        x = rmsnorm(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
