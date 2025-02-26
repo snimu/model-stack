@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass
 import random
 from typing import Literal
+import json
 
 import polars as pl
 import numpy as np
@@ -628,13 +629,21 @@ def train(
 
     if master_process:
         print(f"peak memory consumption: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB")
-        with open(f"{model_id}.txt", "w") as f:
-            f.write(f"val_loss: {val_loss}\n")
+        info = {
+            "val_loss": val_loss,
+            "norm_wte": norm_wte,
+            "norm_lm_head": norm_lm_head,
+            "seed": seed,
+            "model_id": model_id,
+            "from_model": from_model.split("/")[1],
+        }
+        with open(f"logs/{model_id}.txt", "w") as f:
+            f.write(json.dumps(info))
     dist.destroy_process_group()
         
 
     # -------------------------------------------------------------------------
-# TODO: save norm options, save settings per model & load them
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -773,14 +782,30 @@ def main():
         if master_process:
             val_loss /= val_steps
             val_losses = []
+            model_ids = []
+            norm_wtes = []
+            norm_lm_heads = []
+            from_models = []
             for model_name in args.model_names:
                 with open(model_name.split("/")[1] + ".txt", "r") as f:
-                    val_losses.append(float(f.read().split("val_loss: ")[1].split("\n")[0]))
+                    info = json.loads(f.read())
+                    val_losses.append(info["val_loss"])
+                    model_ids.append(info["model_id"])
+                    norm_wtes.append(info["norm_wte"])
+                    norm_lm_heads.append(info["norm_lm_head"])
+                    from_models.append(info["from_model"])
             results = dict(
                 val_loss_stack=[val_loss],
                 val_losses=[str(val_losses)],
                 use_first_layer=[args.use_first_layer],
                 use_last_layer=[args.use_last_layer],
+                norm_wte=[args.norm_wte],
+                norm_lm_head=[args.norm_lm_head],
+                norm_inter_model=[args.norm_inter_model],
+                model_ids=[str(model_ids)],
+                norm_wtes=[str(norm_wtes)],
+                norm_lm_heads=[str(norm_lm_heads)],
+                from_models=[str(from_models)],
                 num_tokens_seen=[int(8*64*1024*args.num_iterations)],  # batch_size*sequence_length*num_iterations
                 num_models=[num_models],
                 seed=[args.seed],
