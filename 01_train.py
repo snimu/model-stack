@@ -14,6 +14,7 @@ import glob
 import time
 from dataclasses import dataclass
 import random
+from typing import Literal
 
 import polars as pl
 import numpy as np
@@ -147,6 +148,10 @@ def rmsnorm(x0, eps=1e-6):
     x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps)
     return x.type_as(x0)
 
+def layernorm(x: torch.Tensor, eps=1e-6):
+    return F.layer_norm(x, x.shape[-1:], weight=None, bias=None, eps=eps)
+
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -213,12 +218,24 @@ class GPTConfig:
     n_layer : int = 12
     n_head : int = 12
     n_embd : int = 768
-    use_norm: bool = False
+    norm_wte: Literal["rms_norm", "layer_norm"] | None = None
+    norm_lm_head: Literal["rms_norm", "layer_norm"] | None = None
     from_model: str | None = None
 
-class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=True)
 
-    def __init__(self, config):
+def choose_norm(norm: Literal["rms_norm", "layer_norm"]):
+    if norm is None:
+        return nn.Identity()
+    if norm == "rms_norm":
+        return rmsnorm
+    if norm == "layer_norm":
+        return layernorm
+    raise ValueError(f"{norm=}")
+
+
+class GPT(nn.Module):
+
+    def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
 
@@ -232,16 +249,17 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
             wte = wte,
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
         ))
+        self.norm_wte = choose_norm(config.norm_wte)
+        self.norm_lm_head = choose_norm(config.norm_lm_head)
 
     def forward(self, idx, targets=None, return_logits=True):
         # forward the GPT model itself
         x = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        if self.config.use_norm:
-            x = rmsnorm(x)
+        x = self.norm_wte(x)
 
         for block in self.transformer.h:
             x = block(x)
-        x = rmsnorm(x)
+        x = self.norm_lm_head(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -263,7 +281,12 @@ class GPT(nn.Module):  # TODO: allow passing of embedding (if not None, no_grad=
 
 class ModelStack(nn.Module):
 
-    def __init__(self, models: list[GPT], use_first_layer=False, use_last_layer=False, use_norm=False):
+    def __init__(
+            self, models: list[GPT], use_first_layer=False, use_last_layer=False,
+            norm_wte: Literal["rms_norm", "layer_norm"] | None = None,
+            norm_lm_head: Literal["rms_norm", "layer_norm"] | None = None,
+            norm_inter_model: Literal["rms_norm", "layer_norm"] | None = None,
+    ):
         super().__init__()
         self.wte = models[0].transformer.wte
         self.lm_head = models[0].lm_head
@@ -273,9 +296,9 @@ class ModelStack(nn.Module):
         end = None if use_last_layer else -1
         transformer_cores = []
         for i in range(len(models)):
-            if i == 0:
+            if i == 0:  # always keep first layer in first model
                 transformer_cores.append([block for block in models[i].transformer.h[:end]])
-            elif i == len(models) - 1:
+            elif i == len(models) - 1:  # always use last layer in last model
                 transformer_cores.append([block for block in models[i].transformer.h[start:]])
             else:
                 transformer_cores.append([block for block in models[i].transformer.h[start:end]])
@@ -285,17 +308,19 @@ class ModelStack(nn.Module):
 
         self.use_first_layer = use_first_layer
         self.use_last_layer = use_last_layer
-        self.use_norm = use_norm
+        self.norm_wte = choose_norm(norm_wte)
+        self.norm_lm_head = choose_norm(norm_lm_head)
+        self.norm_inter_model = choose_norm(norm_inter_model)
 
     def forward(self, x, targets=None, return_logits=True):
-        x = self.wte(x)
+        x = self.norm_wte(self.wte(x))
 
-        for transformer_core in self.transformer_cores:
-            if self.use_norm:
-                x = rmsnorm(x)
+        for i, transformer_core in enumerate(self.transformer_cores):
+            if i > 0:
+                x = self.norm_inter_model(x)
             for block in transformer_core:
                 x = block(x)
-        x = rmsnorm(x)
+        x = self.norm_lm_head(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -416,7 +441,8 @@ def train(
         num_vocab: int = 50304,
         model_id: str = str(uuid.uuid4()),
         from_model: str | None = None,
-        use_norm: bool = False,
+        norm_wte: Literal["rms_norm", "layer_norm"] | None = None,
+        norm_lm_head: Literal["rms_norm", "layer_norm"] | None = "rms_norm",
 ) -> str:
     # set up DDP (distributed data parallel). torchrun sets this env variable
     assert torch.cuda.is_available()
@@ -453,7 +479,8 @@ def train(
 
     # init the model from scratch
     model = GPT(GPTConfig(
-        vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model, use_norm=use_norm,
+        vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model,
+        norm_wte=norm_wte, norm_lm_head=norm_lm_head
     ))
     model = model.cuda()
     if hasattr(config, "coordinate_descent_tuning"):
@@ -607,7 +634,7 @@ def train(
         
 
     # -------------------------------------------------------------------------
-
+# TODO: save norm options, save settings per model & load them
 
 def main():
     parser = argparse.ArgumentParser()
@@ -648,10 +675,16 @@ def main():
         "type=FLAG",
     )
     parser.add_argument(
-        '--use-norm', action='store_true',
-        help="Only relevant when stacking. "
-        "If set, use norm after each transformer core. "
-        "type=FLAG",
+        '--norm-wte', choices=["rms_norm", "layer_norm"], default=None,
+        help="Which norm to use for the wte weights. type=str, default=None",
+    )
+    parser.add_argument(
+        '--norm-lm-head', choices=["rms_norm", "layer_norm"], default="rms_norm",
+        help="Which norm to use for the lm_head weights. type=str, default=rms_norm",
+    )
+    parser.add_argument(
+        '--norm-inter-model', choices=["rms_norm", "layer_norm"], default=None,
+        help="Which norm to use between the wte and lm_head weights. type=str, default=None",
     )
     parser.add_argument('--seed', type=int, default=1234, help="type=int, default=1234")
     parser.add_argument(
@@ -677,7 +710,8 @@ def main():
             from_model=args.from_model,
             weight_decay=args.weight_decay,
             learning_rate=args.learning_rate,
-            use_norm=args.use_norm,
+            norm_wte=args.norm_wte,
+            norm_lm_head=args.norm_lm_head,
         )
     else:
         assert args.model_names is not None
@@ -717,7 +751,9 @@ def main():
             models,
             use_first_layer=args.use_first_layer,
             use_last_layer=args.use_last_layer,
-            use_norm=args.use_norm,
+            norm_wte=args.norm_wte,
+            norm_lm_head=args.norm_lm_head,
+            norm_inter_model=args.norm_inter_model,
         )
         model = model.cuda()
         if hasattr(config, "coordinate_descent_tuning"):
@@ -745,7 +781,6 @@ def main():
                 val_losses=[str(val_losses)],
                 use_first_layer=[args.use_first_layer],
                 use_last_layer=[args.use_last_layer],
-                use_norm=[args.use_norm],
                 num_tokens_seen=[int(8*64*1024*args.num_iterations)],  # batch_size*sequence_length*num_iterations
                 num_models=[num_models],
                 seed=[args.seed],
