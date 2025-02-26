@@ -682,6 +682,11 @@ def main():
         )
     else:
         assert args.model_names is not None
+        assert torch.cuda.is_available()
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed(args.seed)
+        np.random.seed(args.seed)
+        random.seed(args.seed)
         num_models = len(args.model_names)
         input_val_bin = "fineweb100B/fineweb_val_*.bin"
         val_tokens = 10485760
