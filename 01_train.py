@@ -690,15 +690,15 @@ def main():
         "type=FLAG",
     )
     parser.add_argument(
-        '--norm-wte', choices=["rms_norm", "layer_norm"], default=None,
+        '--norm-wte', choices=["rms_norm", "layer_norm", "none"], default="none",
         help="Which norm to use for the wte weights. type=str, default=None",
     )
     parser.add_argument(
-        '--norm-lm-head', choices=["rms_norm", "layer_norm"], default="rms_norm",
+        '--norm-lm-head', choices=["rms_norm", "layer_norm", "none"], default="rms_norm",
         help="Which norm to use for the lm_head weights. type=str, default=rms_norm",
     )
     parser.add_argument(
-        '--norm-inter-model', choices=["rms_norm", "layer_norm"], default=None,
+        '--norm-inter-model', choices=["rms_norm", "layer_norm", "none"], default="none",
         help="Which norm to use between the wte and lm_head weights. type=str, default=None",
     )
     parser.add_argument('--seed', type=int, default=1234, help="type=int, default=1234")
@@ -715,6 +715,9 @@ def main():
         help="Learning rate for AdamW. type=float, default=0.0036",
     )
     args = parser.parse_args()
+    args.norm_wte = None if args.norm_wte == "none" else args.norm_wte
+    args.norm_lm_head = None if args.norm_lm_head == "none" else args.norm_lm_head
+    args.norm_inter_model = None if args.norm_inter_model == "none" else args.norm_inter_model
     torch.set_float32_matmul_precision('high')
     if args.train:
         train(
