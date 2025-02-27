@@ -642,6 +642,8 @@ def train(
             "seed": seed,
             "model_id": model_id,
             "from_model": from_model.split("/")[1],
+            "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
         }
         with open(savefile, "w") as f:
             f.write(json.dumps(info))
@@ -793,11 +795,8 @@ def main():
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
         if master_process:
             val_loss /= val_steps
-            val_losses = []
-            model_ids = []
-            norm_wtes = []
-            norm_lm_heads = []
-            from_models = []
+            val_losses, model_ids, norm_wtes, norm_lm_heads = [], [], [], []
+            from_models, seeds, learning_rates, weight_decays = [], [], [], []
             for model_name in args.model_names:
                 loadfile = model_name.split("/")[0]
                 loadfile = Path("logs") / loadfile / "info.json"
@@ -808,6 +807,9 @@ def main():
                     norm_wtes.append(info["norm_wte"])
                     norm_lm_heads.append(info["norm_lm_head"])
                     from_models.append(info["from_model"])
+                    seeds.append(info["seed"])
+                    learning_rates.append(info["learning_rate"])
+                    weight_decays.append(info["weight_decay"])
             results = dict(
                 val_loss_stack=[val_loss],
                 val_losses=[str(val_losses)],
@@ -822,10 +824,10 @@ def main():
                 from_models=[str(from_models)],
                 num_tokens_seen=[int(8*64*1024*args.num_iterations)],  # batch_size*sequence_length*num_iterations
                 num_models=[num_models],
-                seed=[args.seed],
                 model_names=[str(args.model_names)],
-                weight_decay=[args.weight_decay],
-                learning_rate=[args.learning_rate],
+                seeds=[str(seeds)],
+                learning_rates=[str(learning_rates)],
+                weight_decays=[str(weight_decays)],
             )
             df = pl.DataFrame(results)
             print(df)
