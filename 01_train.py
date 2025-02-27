@@ -642,7 +642,7 @@ def train(
             "norm_lm_head": norm_lm_head,
             "seed": seed,
             "model_id": model_id,
-            "from_model": from_model.split("/")[1],
+            "from_model": from_model.split("/")[1] if from_model else "None",
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
         }
