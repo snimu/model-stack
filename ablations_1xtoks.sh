@@ -1,12 +1,12 @@
 # TRAIN
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte none --norm-lm-head rms_norm --model-id=m1-nr --seed=999444555888
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte none --norm-lm-head rms_norm --model-id=m2-nr --seed=123456789012 --from-model=m1-nr
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte none --norm-lm-head rms_norm --model-id=m1-nr --seed=99944455
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte none --norm-lm-head rms_norm --model-id=m2-nr --seed=12345678 --from-model=m1-nr
 
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m3-rr --seed=330049586744
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m4-rr --seed=228837177718 --from-model=m2-rr
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m3-rr --seed=33004958
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m4-rr --seed=22883717 --from-model=m2-rr
 
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m5-ll --seed=477474747474
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m6-ll --seed=838383929292 --from-model=m6-ll
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m5-ll --seed=47747474
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m6-ll --seed=83838392 --from-model=m6-ll
 
 # STACK & EVAL
 # Norm-less models without norm
