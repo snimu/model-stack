@@ -655,12 +655,6 @@ def train(
 
 
 def main():
-    # Force user to login to wandb.
-    # Useful when running the script multiple times with a .sh-file.
-    # Then, I don't want to be reminded to login after all the ops ran through; it should just happen.
-    if int(os.environ['RANK']) == 0:
-        wandb.login()
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--train', action='store_true',
@@ -735,6 +729,13 @@ def main():
     args.norm_wte = None if args.norm_wte == "none" else args.norm_wte
     args.norm_lm_head = None if args.norm_lm_head == "none" else args.norm_lm_head
     args.norm_inter_model = None if args.norm_inter_model == "none" else args.norm_inter_model
+
+    # Force user to login to wandb.
+    # Useful when running the script multiple times with a .sh-file.
+    # Then, I don't want to be reminded to login after all the ops ran through; it should just happen.
+    if int(os.environ['RANK']) == 0:
+        wandb.login()
+
     torch.set_float32_matmul_precision('high')
     if args.train:
         train(
