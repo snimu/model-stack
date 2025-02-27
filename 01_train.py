@@ -18,6 +18,7 @@ from typing import Literal
 import json
 from pathlib import Path
 
+import wandb
 import polars as pl
 import numpy as np
 import torch
@@ -654,10 +655,23 @@ def train(
 
 
 def main():
+    # Force user to login to wandb.
+    # Useful when running the script multiple times with a .sh-file.
+    # Then, I don't want to be reminded to login after all the ops ran through; it should just happen.
+    wandb.login()
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--train', action='store_true',
         help="If set, train new model; else, stack them.",
+    )
+    parser.add_argument(
+        '--wandb-project', type=str, default="model-stacking",
+        help="wandb project name. type=str, default=model-stacking"
+    )
+    parser.add_argument(
+        "--save-data", action="store_true",
+        help="If set, save data to wandb. type=FLAG"
     )
     parser.add_argument(
         '--savefile', type=str, default="results",
@@ -838,6 +852,17 @@ def main():
                 df.write_csv(f"{args.savefile}.csv")
         
         dist.destroy_process_group()
+    
+    if args.save_data:
+        wandb.init(project=args.wandb_project, config=vars(args))
+        # Get all logs/<model_id>.txt files
+        files = glob.glob("logs/*.txt")
+        for file in files:
+            # Save in wandb
+            wandb.save(file)
+        # Now, save the csv savefile
+        wandb.save(f"{args.savefile}.csv")
+        wandb.finish()
 
 
 if __name__ == "__main__":
