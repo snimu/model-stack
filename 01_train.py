@@ -658,7 +658,8 @@ def main():
     # Force user to login to wandb.
     # Useful when running the script multiple times with a .sh-file.
     # Then, I don't want to be reminded to login after all the ops ran through; it should just happen.
-    wandb.login()
+    if int(os.environ['RANK']) == 0:
+        wandb.login()
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
