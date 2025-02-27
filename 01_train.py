@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import random
 from typing import Literal
 import json
+from pathlib import Path
 
 import polars as pl
 import numpy as np
@@ -242,7 +243,10 @@ class GPT(nn.Module):
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         if config.from_model is not None:
-            self.lm_head.weight.data = torch.load(config.from_model)["model"]["_orig_mod.lm_head.weight"]
+            from_model = Path("logs") / config.from_model
+            if config.from_model.endswith(".pt"):
+                from_model = from_model / "final_state.pt"
+            self.lm_head.weight.data = torch.load(from_model)["model"]["_orig_mod.lm_head.weight"]
         wte = nn.Embedding(config.vocab_size, config.n_embd)
         wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
@@ -628,6 +632,8 @@ def train(
                 f.write(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms\n")
 
     if master_process:
+        savefile = model_id.split("/")[0]
+        savefile = Path("logs") / savefile / "info.json"
         print(f"peak memory consumption: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB")
         info = {
             "val_loss": val_loss,
@@ -637,7 +643,7 @@ def train(
             "model_id": model_id,
             "from_model": from_model.split("/")[1],
         }
-        with open(f"logs/{model_id}.txt", "w") as f:
+        with open(savefile, "w") as f:
             f.write(json.dumps(info))
     dist.destroy_process_group()
         
@@ -750,7 +756,10 @@ def main():
         models = []
         for model_name in args.model_names:
             model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
-            state_dict = torch.load(model_name)["model"]
+            path = Path("logs") / model_name
+            if model_name.endswith(".pt"):
+                path = path / "final_state.pt"
+            state_dict = torch.load(path)["model"]
             state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
             model.load_state_dict(state_dict)
             model = model.cuda()
@@ -787,7 +796,9 @@ def main():
             norm_lm_heads = []
             from_models = []
             for model_name in args.model_names:
-                with open(model_name.split("/")[1] + ".txt", "r") as f:
+                loadfile = model_name.split("/")[0]
+                loadfile = Path("logs") / loadfile / "info.json"
+                with open(loadfile, "r") as f:
                     info = json.loads(f.read())
                     val_losses.append(info["val_loss"])
                     model_ids.append(info["model_id"])
