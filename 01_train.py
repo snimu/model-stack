@@ -858,7 +858,10 @@ def main():
     if args.save_data:
         wandb.init(project=args.wandb_project, config=vars(args))
         # Get all logs/<model_id>.txt files
-        files = glob.glob("logs/*.txt")
+        files = []
+        filepaths = os.listdir("logs")
+        for filepath in filepaths:
+            files.extend(glob.glob(f"logs/{filepath}/*.txt"))
         for file in files:
             # Save in wandb
             wandb.save(file)
