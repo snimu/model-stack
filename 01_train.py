@@ -791,7 +791,7 @@ def main():
         for model_name in args.model_names:
             model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
             path = Path("logs") / model_name
-            if model_name.endswith(".pt"):
+            if not model_name.endswith(".pt"):
                 path = path / "final_state.pt"
             state_dict = torch.load(path)["model"]
             state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
