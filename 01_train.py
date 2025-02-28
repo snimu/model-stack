@@ -749,6 +749,19 @@ def main():
             norm_wte=args.norm_wte,
             norm_lm_head=args.norm_lm_head,
         )
+    elif args.save_data:
+        wandb.init(project=args.wandb_project, config=vars(args))
+        # Get all logs/<model_id>.txt files
+        files = []
+        filepaths = os.listdir("logs")
+        for filepath in filepaths:
+            files.extend([f"logs/{filepath}" + file for file in glob.glob(f"logs/{filepath}/*.txt")])
+        for file in files:
+            # Save in wandb
+            wandb.save(file)
+        # Now, save the csv savefile
+        wandb.save(f"{args.savefile}.csv")
+        wandb.finish()
     else:
         assert args.model_names is not None
         assert torch.cuda.is_available()
@@ -854,20 +867,6 @@ def main():
                 df.write_csv(f"{args.savefile}.csv")
         
         dist.destroy_process_group()
-    
-    if args.save_data:
-        wandb.init(project=args.wandb_project, config=vars(args))
-        # Get all logs/<model_id>.txt files
-        files = []
-        filepaths = os.listdir("logs")
-        for filepath in filepaths:
-            files.extend(glob.glob(f"logs/{filepath}/*.txt"))
-        for file in files:
-            # Save in wandb
-            wandb.save(file)
-        # Now, save the csv savefile
-        wandb.save(f"{args.savefile}.csv")
-        wandb.finish()
 
 
 if __name__ == "__main__":
