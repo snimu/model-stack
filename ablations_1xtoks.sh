@@ -3,10 +3,10 @@ torchrun --nproc_per_node=8 01_train.py --train --norm-wte none --norm-lm-head r
 torchrun --nproc_per_node=8 01_train.py --train --norm-wte none --norm-lm-head rms_norm --model-id=m2-nr --seed=12345678 --from-model=m1-nr
 
 torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m3-rr --seed=33004958
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m4-rr --seed=22883717 --from-model=m2-rr
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte rms_norm --norm-lm-head rms_norm --model-id=m4-rr --seed=22883717 --from-model=m3-rr
 
 torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m5-ll --seed=47747474
-torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m6-ll --seed=83838392 --from-model=m6-ll
+torchrun --nproc_per_node=8 01_train.py --train --norm-wte layer_norm --norm-lm-head layer_norm --model-id=m6-ll --seed=83838392 --from-model=m5-ll
 
 # STACK & EVAL
 # Norm-less models without norm
