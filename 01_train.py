@@ -245,7 +245,7 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         if config.from_model is not None:
             from_model = Path("logs") / config.from_model
-            if config.from_model.endswith(".pt"):
+            if not config.from_model.endswith(".pt"):
                 from_model = from_model / "final_state.pt"
             self.lm_head.weight.data = torch.load(from_model)["model"]["_orig_mod.lm_head.weight"]
         wte = nn.Embedding(config.vocab_size, config.n_embd)
