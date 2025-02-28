@@ -637,14 +637,14 @@ def train(
         savefile = Path("logs") / savefile / "info.json"
         print(f"peak memory consumption: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB")
         info = {
-            "val_loss": val_loss,
-            "norm_wte": norm_wte,
-            "norm_lm_head": norm_lm_head,
-            "seed": seed,
-            "model_id": model_id,
-            "from_model": from_model.split("/")[1] if from_model else "None",
-            "learning_rate": learning_rate,
-            "weight_decay": weight_decay,
+            "val_loss": float(val_loss),
+            "norm_wte": str(norm_wte),
+            "norm_lm_head": str(norm_lm_head),
+            "seed": int(seed),
+            "model_id": str(model_id),
+            "from_model": str(from_model.split("/")[1] if from_model else "None"),
+            "learning_rate": float(learning_rate),
+            "weight_decay": float(weight_decay),
         }
         with open(savefile, "w") as f:
             f.write(json.dumps(info))
