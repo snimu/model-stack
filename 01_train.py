@@ -4,6 +4,7 @@ Modified from https://github.com/KellerJordan/modded-nanogpt/blob/master/records
   where the embedding and lm-head weights are tied. 
 """
 
+import itertools
 import argparse
 import os
 import sys
@@ -27,6 +28,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 import torch._inductor.config as config
 from torch.nn.parallel import DistributedDataParallel as DDP
+from tabulate import tabulate
 
 # -----------------------------------------------------------------------------
 # Muon optimizer
@@ -661,6 +663,11 @@ def main():
         help="If set, train new model; else, stack them.",
     )
     parser.add_argument(
+        '--latent-metrics', action='store_true',
+        help="If set, compute metrics about the models metrics "
+        "(from models in --model-names). type=FLAG",
+    )
+    parser.add_argument(
         '--wandb-project', type=str, default="model-stacking",
         help="wandb project name. type=str, default=model-stacking"
     )
@@ -762,10 +769,145 @@ def main():
         # Now, save the csv savefile
         wandb.save(f"{args.savefile}.csv")
         wandb.finish()
+    elif args.latent_metrics:
+        # Get single batch
+        tokens = _load_data_shard("fineweb100B/fineweb_val_0.bin")
+        tokens = tokens[:1024]
+        tokens = torch.tensor(tokens.astype(np.int32), dtype=torch.long).view(1, -1)
+        tokens = tokens.cuda()
+
+        # Get embedding & output activations of each model
+        activations_in = dict()
+        activations_out = dict()
+        activations_first = dict()
+        activations_last = dict()
+        for model_name in args.model_names:
+            loadfile = model_name.split("/")[0]
+            loadfile = Path("logs") / loadfile / "info.json"
+            with open(loadfile, "r") as f:
+                info = json.loads(f.read())
+                norm_wte = info["norm_wte"]
+                norm_lm_head = info["norm_lm_head"]
+            model = GPT(GPTConfig(
+                vocab_size=50304, n_layer=12, n_head=12, n_embd=768,
+                norm_wte=norm_wte, norm_lm_head=norm_lm_head,
+            ))
+            path = Path("logs") / model_name
+            if not model_name.endswith(".pt"):
+                path = path / "final_state.pt"
+            state_dict = torch.load(path)["model"]
+            state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+            model.load_state_dict(state_dict)
+            model = model.cuda()
+            model.eval()
+            with torch.no_grad():
+                x = model.transformer.wte(tokens)
+                x = model.norm_wte(x)
+                activations_in[model_name] = x.squeeze().cpu()  # TODO: activations_first, activations_last
+                x = model.transformer.h[0](x)
+                activations_first[model_name] = x.squeeze().cpu()
+                for block in model.transformer.h[1:-1]:
+                    x = block(x)
+                activations_last[model_name] = model.norm_lm_head(x).squeeze().cpu()
+                x = model.transformer.h[-1](x)
+                x = model.norm_lm_head(x)
+                activations_out[model_name] = x.squeeze().cpu()
+        # Get basic stats about the activations
+        stats = dict(model_name=[], position=[], mean=[], std=[], min=[], max=[])
+        for model_name in args.model_names:
+            stats["model_name"].append(model_name)
+            stats["position"].append("in")
+            stats["mean"].append(activations_in[model_name].mean())
+            stats["std"].append(activations_in[model_name].std())
+            stats["min"].append(activations_in[model_name].min())
+            stats["max"].append(activations_in[model_name].max())
+            stats["position"].append("out")
+            stats["mean"].append(activations_out[model_name].mean())
+            stats["std"].append(activations_out[model_name].std())
+            stats["min"].append(activations_out[model_name].min())
+            stats["max"].append(activations_out[model_name].max())
+            stats["position"].append("first")
+            stats["mean"].append(activations_first[model_name].mean())
+            stats["std"].append(activations_first[model_name].std())
+            stats["min"].append(activations_first[model_name].min())
+            stats["max"].append(activations_first[model_name].max())
+            stats["position"].append("last")
+            stats["mean"].append(activations_last[model_name].mean())
+            stats["std"].append(activations_last[model_name].std())
+            stats["min"].append(activations_last[model_name].min())
+            stats["max"].append(activations_last[model_name].max())
+        pl.DataFrame(stats).write_csv(f"{args.savefile}-stats.csv")
+        table = tabulate(stats, headers="firstrow")
+        print(table)
+
+        # Calculate the cos-sim between all saved vectors and all other vectors
+        # and save the results in a csv file
+        # first, createtwo vectors which, pairwise, contain all the combinations of vectors
+        # then, use F.cosine_similarity to calcutate the cos-sim
+        model_pairs = {
+            set(m1, m2)
+            for m1, m2 in itertools.combinations(args.model_names, 2)
+            if m1 != m2
+        }
+        model_pairs = [sorted(tuple(m)) for m in model_pairs]
+        model_pairs = sorted(model_pairs)
+        cos_sims = {
+            "models": [],
+            "m1-in-m1-out": [],
+            "m2-in-m2-out": [],
+            "m1-in-m1-last": [],
+            "m2-in-m2-last": [],
+            "m1-first-m1-out": [],
+            "m2-first-m2-out": [],
+            "m1-first-m1-last": [],
+            "m2-first-m2-last": [],
+            "m1-out-m2-in": [],
+            "m1-last-m2-in": [],
+            "m1-out-m2-first": [],
+            "m1-last-m2-first": [],
+        }
+        for m1, m2 in model_pairs:
+            cos_sims["models"].append(str([m1, m2]))
+            cos_sims["m1-in-m1-out"].append(
+                F.cosine_similarity(activations_in[m1], activations_out[m1]).mean().item()
+            )
+            cos_sims["m2-in-m2-out"].append(
+                F.cosine_similarity(activations_in[m2], activations_out[m2]).mean().item()
+            )
+            cos_sims["m1-in-m1-last"].append(
+                F.cosine_similarity(activations_in[m1], activations_last[m1]).mean().item()
+            )
+            cos_sims["m2-in-m2-last"].append(
+                F.cosine_similarity(activations_in[m2], activations_last[m2]).mean().item()
+            )
+            cos_sims["m1-first-m1-out"].append(
+                F.cosine_similarity(activations_first[m1], activations_out[m1]).mean().item()
+            )
+            cos_sims["m2-first-m2-out"].append(
+                F.cosine_similarity(activations_first[m2], activations_out[m2]).mean().item()
+            )
+            cos_sims["m1-first-m1-last"].append(
+                F.cosine_similarity(activations_first[m1], activations_last[m1]).mean().item()
+            )
+            cos_sims["m2-first-m2-last"].append(
+                F.cosine_similarity(activations_first[m2], activations_last[m2]).mean().item()
+            )
+            cos_sims["m1-out-m2-in"].append(
+                F.cosine_similarity(activations_out[m1], activations_in[m2]).mean().item()
+            )
+            cos_sims["m2-out-m1-in"].append(
+                F.cosine_similarity(activations_out[m2], activations_in[m1]).mean().item()
+            )
+            cos_sims["m1-out-m2-first"].append(
+                F.cosine_similarity(activations_out[m1], activations_first[m2]).mean().item()
+            )
+            cos_sims["m2-out-m1-first"].append(
+                F.cosine_similarity(activations_out[m2], activations_first[m1]).mean().item()
+            )
+        pl.DataFrame(cos_sims).write_csv(f"{args.savefile}-cos-sims.csv")
+        table = tabulate(cos_sims, headers="firstrow")
+        print(table)
     else:
-        assert args.model_names is not None
-        assert torch.cuda.is_available()
-        torch.manual_seed(args.seed)
         torch.cuda.manual_seed(args.seed)
         np.random.seed(args.seed)
         random.seed(args.seed)
