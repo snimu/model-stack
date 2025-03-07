@@ -4,3 +4,4 @@ torch
 huggingface-hub
 polars
 wandb
+tabulate

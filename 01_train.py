@@ -260,9 +260,12 @@ class GPT(nn.Module):
         self.norm_wte = choose_norm(config.norm_wte)
         self.norm_lm_head = choose_norm(config.norm_lm_head)
 
-    def forward(self, idx, targets=None, return_logits=True):
+    def forward(self, idx, targets=None, return_logits=True, return_latents=False, latents_in=None):
         # forward the GPT model itself
-        x = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        if latents_in is not None:
+            x = latents_in
+        else:
+            x = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         x = self.norm_wte(x)
 
         for block in self.transformer.h:
@@ -283,8 +286,10 @@ class GPT(nn.Module):
         # there are performance reasons why not returning logits is prudent, if not needed
         if not return_logits:
             logits = None
+        
+        latents = x if return_latents else None
 
-        return logits, loss
+        return logits, latents, loss
 
 
 class ModelStack(nn.Module):
@@ -451,6 +456,7 @@ def train(
         from_model: str | None = None,
         norm_wte: Literal["rms_norm", "layer_norm"] | None = None,
         norm_lm_head: Literal["rms_norm", "layer_norm"] | None = "rms_norm",
+        coconut_every: int = -1,
 ) -> str:
     # set up DDP (distributed data parallel). torchrun sets this env variable
     assert torch.cuda.is_available()
@@ -569,7 +575,7 @@ def train(
             for _ in range(val_steps):
                 x_val, y_val = val_loader.next_batch()
                 with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-                    _, loss = model(x_val, y_val, return_logits=False)
+                    _, loss, _ = model(x_val, y_val, return_logits=False)
                     val_loss += loss
             dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
             val_loss /= val_steps
@@ -603,11 +609,14 @@ def train(
 
         # --------------- TRAINING SECTION BEGIN -----------------
         model.train()
+        latent_loss = None
         for i in range(1, train_accumulation_steps+1):
+            do_coconut = coconut_every > 0 and step % coconut_every == 0
             # forward pass
             with ctx:
-                _, loss = model(x, y, return_logits=False)
+                _, loss, latents = model(x, y, return_logits=False, return_latents=do_coconut)
                 train_loss = loss.detach()
+                latent_loss = latent_loss or train_loss  # use previous latent loss or init as train loss
             # advance the dataset for the next batch
             x, y = train_loader.next_batch()
             # backward pass
@@ -616,6 +625,17 @@ def train(
                     loss.backward()
             else:
                 loss.backward() # just sync on the last step
+            # Now the same again, but with coconut
+            if do_coconut:
+                with ctx:
+                    _, loss, _ = model(x, y, return_logits=False, return_latents=False, latents_in=latents)
+                    latent_loss = loss.detach()
+                # backward pass
+                if i < train_accumulation_steps:
+                    with model.no_sync(): # there's no need to sync gradients every accumulation step
+                        loss.backward()
+                else:
+                    loss.backward() # just sync on the last step
         for p in model.parameters():
             p.grad /= train_accumulation_steps
         # step the optimizers and schedulers
@@ -647,6 +667,7 @@ def train(
             "from_model": str(from_model if from_model else "None"),
             "learning_rate": float(learning_rate),
             "weight_decay": float(weight_decay),
+            "coconut_every": int(coconut_every),
         }
         with open(savefile, "w") as f:
             f.write(json.dumps(info))
@@ -693,6 +714,11 @@ def main():
     )
     parser.add_argument('--num-iterations', type=int, default=6200, help="type=int, default=6200")
     parser.add_argument('--warmdown-iters', type=int, default=1800, help="type=int, default=1800")
+    parser.add_argument(
+        '--coconut-every', type=int, default=-1,
+        help="Train on model's own latents every n steps. If -1, never train on latents. "
+        "type=int, default=-1"
+    )
     parser.add_argument(
         '--use-first-layer', action='store_true',
         help="Only relevant when stacking. "
@@ -755,6 +781,7 @@ def main():
             learning_rate=args.learning_rate,
             norm_wte=args.norm_wte,
             norm_lm_head=args.norm_lm_head,
+            coconut_every=args.coconut_every,
         )
     elif args.save_data:
         wandb.init(project=args.wandb_project, config=vars(args))
@@ -961,13 +988,14 @@ def main():
         for _ in range(val_steps):
             x_val, y_val = val_loader.next_batch()
             with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-                _, loss = model(x_val, y_val, return_logits=False)
+                _, loss, _ = model(x_val, y_val, return_logits=False)
                 val_loss += loss
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
         if master_process:
             val_loss /= val_steps
             val_losses, model_ids, norm_wtes, norm_lm_heads = [], [], [], []
             from_models, seeds, learning_rates, weight_decays = [], [], [], []
+            coconut_everies = []
             for model_name in args.model_names:
                 loadfile = model_name.split("/")[0]
                 loadfile = Path("logs") / loadfile / "info.json"
@@ -981,6 +1009,7 @@ def main():
                     seeds.append(info["seed"])
                     learning_rates.append(info["learning_rate"])
                     weight_decays.append(info["weight_decay"])
+                    coconut_everies.append(info["coconut_every"])
             results = dict(
                 val_loss_stack=[val_loss],
                 val_losses=[str(val_losses)],
