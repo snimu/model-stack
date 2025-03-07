@@ -226,6 +226,7 @@ class GPTConfig:
     norm_wte: Literal["rms_norm", "layer_norm"] | None = None
     norm_lm_head: Literal["rms_norm", "layer_norm"] | None = None
     from_model: str | None = None
+    detach_output_latents: bool = True
 
 
 def choose_norm(norm: Literal["rms_norm", "layer_norm"]):
@@ -259,6 +260,7 @@ class GPT(nn.Module):
         ))
         self.norm_wte = choose_norm(config.norm_wte)
         self.norm_lm_head = choose_norm(config.norm_lm_head)
+        self.detach_output_latents = config.detach_output_latents
 
     def forward(self, idx, targets=None, return_logits=True, return_latents=False, latents_in=None):
         # forward the GPT model itself
@@ -287,7 +289,13 @@ class GPT(nn.Module):
         if not return_logits:
             logits = None
         
-        latents = x if return_latents else None
+        if return_latents:
+            if self.detach_output_latents:
+                latents = x.detach()
+            else:
+                latents = x
+        else:
+            latents = None
 
         return logits, latents, loss
 
@@ -457,6 +465,7 @@ def train(
         norm_wte: Literal["rms_norm", "layer_norm"] | None = None,
         norm_lm_head: Literal["rms_norm", "layer_norm"] | None = "rms_norm",
         coconut_every: int = -1,
+        detach_output_latents: bool = True,
 ) -> str:
     # set up DDP (distributed data parallel). torchrun sets this env variable
     assert torch.cuda.is_available()
@@ -494,7 +503,7 @@ def train(
     # init the model from scratch
     model = GPT(GPTConfig(
         vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model,
-        norm_wte=norm_wte, norm_lm_head=norm_lm_head
+        norm_wte=norm_wte, norm_lm_head=norm_lm_head, detach_output_latents=detach_output_latents
     ))
     model = model.cuda()
     if hasattr(config, "coordinate_descent_tuning"):
@@ -668,6 +677,7 @@ def train(
             "learning_rate": float(learning_rate),
             "weight_decay": float(weight_decay),
             "coconut_every": int(coconut_every),
+            "detach_output_latents": bool(detach_output_latents),
         }
         with open(savefile, "w") as f:
             f.write(json.dumps(info))
@@ -718,6 +728,11 @@ def main():
         '--coconut-every', type=int, default=-1,
         help="Train on model's own latents every n steps. If -1, never train on latents. "
         "type=int, default=-1"
+    )
+    parser.add_argument(
+        '--detach-output-latents', choices=[0, 1], default=1,
+        help="If set to 1, detach the output latents when coconut-style latent looping is used. "
+        "type=int, default=1"
     )
     parser.add_argument(
         '--use-first-layer', action='store_true',
@@ -782,6 +797,7 @@ def main():
             norm_wte=args.norm_wte,
             norm_lm_head=args.norm_lm_head,
             coconut_every=args.coconut_every,
+            detach_output_latents=args.detach_output_latents,
         )
     elif args.save_data:
         wandb.init(project=args.wandb_project, config=vars(args))
@@ -815,9 +831,10 @@ def main():
                 info = json.loads(f.read())
                 norm_wte = info["norm_wte"]
                 norm_lm_head = info["norm_lm_head"]
+                detach_output_latents = info["detach_output_latents"]
             model = GPT(GPTConfig(
                 vocab_size=50304, n_layer=12, n_head=12, n_embd=768,
-                norm_wte=norm_wte, norm_lm_head=norm_lm_head,
+                norm_wte=norm_wte, norm_lm_head=norm_lm_head, detach_output_latents=detach_output_latents,
             ))
             path = Path("logs") / model_name
             if not model_name.endswith(".pt"):
@@ -958,7 +975,7 @@ def main():
         
         models = []
         for model_name in args.model_names:
-            model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))
+            model = GPT(GPTConfig(vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768))  # all the other stuff is irrelevant because we just directly use the transformer blocks
             path = Path("logs") / model_name
             if not model_name.endswith(".pt"):
                 path = path / "final_state.pt"
