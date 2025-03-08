@@ -1017,7 +1017,7 @@ def main():
             val_loss /= val_steps
             val_losses, model_ids, norm_wtes, norm_lm_heads = [], [], [], []
             from_models, seeds, learning_rates, weight_decays = [], [], [], []
-            coconut_everies = []
+            coconut_everies, detach_output_latents = [], []
             for model_name in args.model_names:
                 loadfile = model_name.split("/")[0]
                 loadfile = Path("logs") / loadfile / "info.json"
@@ -1032,6 +1032,7 @@ def main():
                     learning_rates.append(info["learning_rate"])
                     weight_decays.append(info["weight_decay"])
                     coconut_everies.append(info["coconut_every"])
+                    detach_output_latents.append(info["detach_output_latents"])
             results = dict(
                 val_loss_stack=[val_loss],
                 val_losses=[str(val_losses)],
@@ -1050,6 +1051,8 @@ def main():
                 seeds=[str(seeds)],
                 learning_rates=[str(learning_rates)],
                 weight_decays=[str(weight_decays)],
+                coconut_everies=[str(coconut_everies)],
+                detach_output_latents=[str(detach_output_latents)],
             )
             df = pl.DataFrame(results)
             print(df)
