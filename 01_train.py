@@ -659,9 +659,14 @@ def train(
         #dist.all_reduce(train_loss, op=dist.ReduceOp.AVG) # all-reducing the training loss would be more correct in terms of logging, but slower
         if master_process:
             approx_time = training_time_ms + 1000 * (time.time() - t0)
-            print(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms")
-            with open(logfile, "a") as f:
-                f.write(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms\n")
+            if do_coconut:
+                print(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} latent_loss: {latent_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms")
+                with open(logfile, "a") as f:
+                    f.write(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} latent_loss: {latent_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms\n")
+            else:
+                print(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms")
+                with open(logfile, "a") as f:
+                    f.write(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms\n")
 
     if master_process:
         savefile = model_id.split("/")[0]
