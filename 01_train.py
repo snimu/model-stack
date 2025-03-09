@@ -358,7 +358,7 @@ class ModelStack(nn.Module):
         if not return_logits:
             logits = None
 
-        return logits, loss
+        return logits, None, loss  # None for the latents; not needed here, but return signature should be like GPT
 
 
 # -----------------------------------------------------------------------------
@@ -584,7 +584,7 @@ def train(
             for _ in range(val_steps):
                 x_val, y_val = val_loader.next_batch()
                 with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-                    _, loss, _ = model(x_val, y_val, return_logits=False)
+                    _, _, loss = model(x_val, y_val, return_logits=False)
                     val_loss += loss
             dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
             val_loss /= val_steps
@@ -623,7 +623,7 @@ def train(
             do_coconut = coconut_every > 0 and step % coconut_every == 0
             # forward pass
             with ctx:
-                _, loss, latents = model(x, y, return_logits=False, return_latents=do_coconut)
+                _, latents, loss = model(x, y, return_logits=False, return_latents=do_coconut)
                 train_loss = loss.detach()
                 latent_loss = latent_loss or train_loss  # use previous latent loss or init as train loss
             # advance the dataset for the next batch
@@ -637,7 +637,7 @@ def train(
             # Now the same again, but with coconut
             if do_coconut:
                 with ctx:
-                    _, loss, _ = model(x, y, return_logits=False, return_latents=False, latents_in=latents)
+                    _, _, loss = model(x, y, return_logits=False, return_latents=False, latents_in=latents)
                     latent_loss = loss.detach()
                 # backward pass
                 if i < train_accumulation_steps:
@@ -1010,7 +1010,7 @@ def main():
         for _ in range(val_steps):
             x_val, y_val = val_loader.next_batch()
             with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-                _, loss, _ = model(x_val, y_val, return_logits=False)
+                _, _, loss = model(x_val, y_val, return_logits=False)
                 val_loss += loss
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
         if master_process:
