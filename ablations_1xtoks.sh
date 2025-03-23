@@ -46,4 +46,4 @@ torchrun --nproc_per_node=8 01_train.py --model-names m5-ll m5-ll --norm-wte lay
 torchrun --nproc_per_node=8 01_train.py --model-names m5-ll m5-ll --norm-wte layer_norm --norm-lm-head layer_norm --norm-inter-model layer_norm --savefile=results --use-first-layer --use-last-layer
 
 # SAVE DATA
-python 01_train.py --save-data --savefile=results --wandb-project=model-stacking
+torchrun --nproc_per_node=8 01_train.py --save-data --savefile=results --wandb-project=model-stacking
