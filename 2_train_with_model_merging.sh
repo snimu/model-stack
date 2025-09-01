@@ -2,14 +2,14 @@ torchrun --standalone --nproc-per-node=8 2_train_with_model_merging.py \
     --train \
     --savefile results-one \
     --model-id one \
-    --seed 28882828299
+    --seed 229806
 
 torchrun --standalone --nproc-per-node=8 2_train_with_model_merging.py \
     --train \
     --savefile results-two \
     --model-id two \
     --from-model one \
-    --seed 9922992211
+    --seed 122334
 
 torchrun --standalone --nproc-per-node=8 2_train_with_model_merging.py \
     --train \
@@ -18,7 +18,7 @@ torchrun --standalone --nproc-per-node=8 2_train_with_model_merging.py \
     --mixin-weight 0.1 \
     --mixin-every 100 \
     --mixin-from two \
-    --seed 456783623
+    --seed 544332
 
 torchrun --standalone --nproc-per-node=8 2_train_with_model_merging.py \
     --model-names two three \
