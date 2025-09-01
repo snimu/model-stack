@@ -275,9 +275,10 @@ def merge_models(models: list[GPT], merge_weights: list[float]) -> GPT:
     model = models.pop(0)
     for merge_model in models:
         for i in range(len(model.transformer.h)):
-            model.transformer.h[i].weight.data.mul_(merge_weights[0])
-            merge_model.transformer.h[i].weight.data.mul_(merge_weights[1])
-            model.transformer.h[i] = model.transformer.h[i] + merge_model.transformer.h[i]
+            for param, param_merge in zip(model.transformer.h[i].parameters(), merge_model.transformer.h[i].parameters()):
+                param.data.mul_(merge_weights[0])
+                param_merge.data.mul_(merge_weights[1])
+                param.data.add_(param_merge.data)
     return model
 
 
