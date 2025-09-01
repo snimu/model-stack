@@ -616,19 +616,19 @@ def train(
             with open(logfile, "a") as f:
                 f.write(f"step:{step+1}/{num_iterations} train_loss:{train_loss.item():.4f} train_time:{approx_time:.0f}ms step_avg:{approx_time/timed_steps:.2f}ms\n")
 
-    if mixin_every > 0 and step % mixin_every == 0:
-        if master_process:
-            print(f"Mixing in model from {mixin_from}")
-        assert mixin_from is not None
-        mixin_model = GPT(GPTConfig(
-            vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=mixin_from,
-            only_load_lm_head=False,
-        ))
-        mixin_model = mixin_model.to(device=torch.device(f"cuda:{ddp_local_rank}"))
-        model = merge_models(
-            models=[model, mixin_model],
-            merge_weights=[1.0 - mixin_weight, mixin_weight],
-        )
+        if mixin_every > 0 and step % mixin_every == 0:
+            if master_process:
+                print(f"Mixing in model from {mixin_from}")
+            assert mixin_from is not None
+            mixin_model = GPT(GPTConfig(
+                vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=mixin_from,
+                only_load_lm_head=False,
+            ))
+            mixin_model = mixin_model.to(device=torch.device(f"cuda:{ddp_local_rank}"))
+            model = merge_models(
+                models=[model, mixin_model],
+                merge_weights=[1.0 - mixin_weight, mixin_weight],
+            )
     if master_process:
         savefile = model_id.split("/")[0]
         savefile = Path("logs") / savefile / "info.json"
