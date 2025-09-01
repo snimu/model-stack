@@ -549,7 +549,7 @@ def train(
             for _ in range(val_steps):
                 x_val, y_val = val_loader.next_batch()
                 with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-                    loss = model(x_val, y_val, return_logits=False)
+                    loss = model(x_val, y_val)
                     val_loss += loss
             dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
             val_loss /= val_steps
@@ -587,7 +587,7 @@ def train(
         for i in range(1, train_accumulation_steps+1):
             # forward pass
             with ctx:
-                loss = model(x, y, return_logits=False)
+                loss = model(x, y)
                 train_loss = loss.detach()
                 latent_loss = latent_loss or train_loss  # use previous latent loss or init as train loss
             # advance the dataset for the next batch
@@ -707,7 +707,7 @@ def eval_stack(
     for _ in range(val_steps):
         x_val, y_val = val_loader.next_batch()
         with torch.no_grad(): # of course, we'd like to use ctx here too, but that creates a torch.compile error for some reason
-            loss = model(x_val, y_val, return_logits=False)
+            loss = model(x_val, y_val)
             val_loss += loss
     dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
     if master_process:
