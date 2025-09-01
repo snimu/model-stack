@@ -626,7 +626,7 @@ def train(
             ))
             mixin_model = mixin_model.to(device=torch.device(f"cuda:{ddp_local_rank}"))
             model = merge_models(
-                models=[model, mixin_model],
+                models=[raw_model, mixin_model],
                 merge_weights=[1.0 - mixin_weight, mixin_weight],
             )
     if master_process:
