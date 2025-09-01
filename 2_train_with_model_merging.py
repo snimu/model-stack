@@ -221,7 +221,6 @@ class GPTConfig:
     n_embd : int = 768
     from_model: str | None = None
     only_load_lm_head: bool = True
-    detach_output_latents: bool = True
 
 
 class GPT(nn.Module):
@@ -250,7 +249,6 @@ class GPT(nn.Module):
                 self.transformer.h.state_dict().update({k.split(".h")[1]: v for k, v in loaded.items() if "transformer.h" in k})
 
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
-        self.detach_output_latents = config.detach_output_latents
 
     def forward(self, idx, targets):
         # forward the GPT model itself
@@ -431,7 +429,6 @@ def train(
         num_vocab: int = 50304,
         model_id: str = str(uuid.uuid4()),
         from_model: str | None = None,
-        detach_output_latents: bool = True,
         mixin_weight: float = 0.0,
         mixin_every: int = 0,
         mixin_from: str | None = None,
@@ -472,7 +469,6 @@ def train(
     # init the model from scratch
     model = GPT(GPTConfig(
         vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=from_model,
-        detach_output_latents=detach_output_latents,
     ))
     model = model.cuda()
     if hasattr(config, "coordinate_descent_tuning"):
@@ -624,7 +620,7 @@ def train(
         assert mixin_from is not None
         mixin_model = GPT(GPTConfig(
             vocab_size=num_vocab, n_layer=12, n_head=12, n_embd=768, from_model=mixin_from,
-            only_load_lm_head=False, detach_output_latents=detach_output_latents,
+            only_load_lm_head=False,
         ))
         mixin_model = mixin_model.to(device=torch.device(f"cuda:{ddp_local_rank}"))
         model = merge_models(
@@ -642,7 +638,6 @@ def train(
             "from_model": str(from_model if from_model else "None"),
             "learning_rate": float(learning_rate),
             "weight_decay": float(weight_decay),
-            "detach_output_latents": bool(detach_output_latents),
             "mixin_weight": float(mixin_weight),
             "mixin_every": int(mixin_every),
             "mixin_from": str(mixin_from if mixin_from else "None"),
@@ -719,7 +714,6 @@ def eval_stack(
         val_loss /= val_steps
         val_losses, model_ids = [], [], [], []
         from_models, seeds, learning_rates, weight_decays = [], [], [], []
-        detach_output_latents = [], []
         for model_name in model_names:
             loadfile = model_name.split("/")[0]
             loadfile = Path("logs") / loadfile / "info.json"
@@ -731,7 +725,6 @@ def eval_stack(
                 seeds.append(info["seed"])
                 learning_rates.append(info["learning_rate"])
                 weight_decays.append(info["weight_decay"])
-                detach_output_latents.append(info["detach_output_latents"])
         results = dict(
             val_loss_stack=[val_loss],
             val_losses=[str(val_losses)],
@@ -745,7 +738,6 @@ def eval_stack(
             seeds=[str(seeds)],
             learning_rates=[str(learning_rates)],
             weight_decays=[str(weight_decays)],
-            detach_output_latents=[str(detach_output_latents)],
         )
         df = pl.DataFrame(results)
         print(df)
@@ -833,7 +825,6 @@ def main():
             from_model=args.from_model,
             weight_decay=args.weight_decay,
             learning_rate=args.learning_rate,
-            detach_output_latents=args.detach_output_latents,
             mixin_weight=args.mixin_weight,
             mixin_every=args.mixin_every,
             mixin_from=args.mixin_from,
