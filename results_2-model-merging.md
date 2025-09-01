@@ -164,3 +164,11 @@ step:6200/6200 val_loss:3.4287 train_time:1055868ms step_avg:170.58ms
 
 ## Stacks
 
+Results:
+
+| val_loss_stack | val_losses | model_names |
+| :---: | :---: | :---: |
+| 15.87 | 3.33, 3.43 | 'two', 'three'|
+| 11.80 | 3.33, 3.33 | 'two', 'two' |
+| 11.34 | 3.30, 3.33 |'one', 'two' |
+| 18.38 | 3.30, 3.33, 3.43 |'one', 'two', 'three' |
