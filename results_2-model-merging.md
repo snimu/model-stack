@@ -172,3 +172,12 @@ Results:
 | 11.80 | 3.33, 3.33 | 'two', 'two' |
 | 11.34 | 3.30, 3.33 |'one', 'two' |
 | 18.38 | 3.30, 3.33, 3.43 |'one', 'two', 'three' |
+
+With nicer naming:
+
+| val_loss_stack | val_losses | model_names |
+| :---: | :---: | :---: |
+| 15.87 | 3.33, 3.43 | 'mixin-model', 'target-model'|
+| 11.80 | 3.33, 3.33 | 'mixin-model', 'mixin-model' |
+| 11.34 | 3.30, 3.33 |'orig-model', 'mixin-model' |
+| 18.38 | 3.30, 3.33, 3.43 |'orig-model', 'mixin-model', 'target-model' |
