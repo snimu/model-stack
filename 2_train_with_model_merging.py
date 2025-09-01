@@ -715,7 +715,7 @@ def eval_stack(
     dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
     if master_process:
         val_loss /= val_steps
-        val_losses, model_ids = [], [], [], []
+        val_losses, model_ids = [], []
         from_models, seeds, learning_rates, weight_decays = [], [], [], []
         for model_name in model_names:
             loadfile = model_name.split("/")[0]
